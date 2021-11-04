@@ -25,7 +25,7 @@ globals [
                     ; (2 * boltzmann constant / m). It is arbitrary for this simulation since
                     ; the units are also arbitrary.
   link-check-dist ; each atom links with neighbors within this distance
-  prev-lattice-view ; the lattice view in the previous time step
+  prev-atom-viz-size  ; previous atom viz size
   upper-left-fl ; upper left force line - shear
   left-fl ; left force line - tension, compression
   right-edge ; where the right side of the sample is (xcor) - tension,
@@ -56,23 +56,27 @@ to setup
   set link-check-dist 1.5
   setup-atoms-and-links-and-force-lines
   init-velocity
-  update-lattice-view
   reset-ticks
 end
 
+
+to init-atom
+  set shape "circle"
+  set color blue
+  set mass 1
+  set sigma .899  ; sigma of .899 start stress-strain curve at about 0
+  set pinned? False
+  set ex-force-applied? False
+  set selected? false
+  set-size
+end
 to setup-atoms-and-links-and-force-lines
   ; making a symmetrical sample for tension mode
   if force-mode = "Tension" and atoms-per-column mod 2 = 0 [
     set atoms-per-column atoms-per-column + 1
   ]
   create-atoms atoms-per-row * atoms-per-column [
-    set shape "circle"
-    set color blue
-    set mass 1
-    set sigma .899  ; sigma of .899 start stress-strain curve at about 0
-    set pinned? False
-    set ex-force-applied? False
-    set selected? false
+    init-atom
   ]
   let x-dist 1 ; the distance between atoms in the x direction
   let y-dist sqrt (x-dist ^ 2 - (x-dist / 2) ^ 2) ; the distance between rows
@@ -269,22 +273,14 @@ to go
 end
 
 to update-lattice-view
-  (ifelse lattice-view = "large-atoms" [
-    ask atoms [
-      show-turtle
-      set size sigma
-    ]
+  if atom-viz-size != prev-atom-viz-size [
+    ask atoms [set-size]
   ]
-  lattice-view = "small-atoms" [
-    ask atoms [
-       show-turtle
-       set size sigma * .6
-    ]
-  ]
-  [; lattice-view = hide-atoms
-      ask atoms [ hide-turtle ]
-  ])
-  set prev-lattice-view lattice-view
+  set prev-atom-viz-size  atom-viz-size
+end
+
+to set-size
+  set size sigma * atom-viz-size
 end
 
 ; this heats or cools the system based on the average temperature of the system compared to the set system-temp
@@ -308,7 +304,21 @@ to delete-atoms
   display
 end
 
+to add-atoms
+  if mouse-down? and not any? atoms with [distancexy mouse-xcor mouse-ycor < .2] [
+    let closest-atom min-one-of atoms [distancexy mouse-xcor mouse-ycor]
+    let new-atom-force last [LJ-potential-and-force (distancexy mouse-xcor mouse-ycor) sigma new-atom-sigma] of closest-atom
+    if abs new-atom-force < 20 [
 
+      create-atoms 1 [
+        init-atom
+        set sigma new-atom-sigma
+        set-size
+        setxy mouse-xcor mouse-ycor
+      ]
+    ]
+  ]
+end
 to select-atoms
   if mouse-down? [
 ;    ask atoms with [xcor <= mouse-xcor + .5 and xcor > mouse-xcor - .5
@@ -427,7 +437,7 @@ to update-force-and-velocity-and-links
 end
 
 to update-atom-color [total-force] ; updating atom color
-  (ifelse update-atom-color? [
+  (ifelse color-atoms-by-potential-energy? [
     set-color total-force
   ]
    [ set-selected-color ])
@@ -485,7 +495,8 @@ to-report velocity-verlet-velocity [v a new-a]  ; velocity, acceleration, new ac
 end
 
 to set-color [v]
-  set color scale-color blue v -.9 0
+  let base-color ifelse-value selected? [red] [blue]
+  set color scale-color base-color  v -.9 0
 end
 
 to-report strain ; tension only
@@ -509,8 +520,8 @@ end
 
 to color-links
   set thickness .25 ; necessary because the links die and reform every tick
-  let min-eq-bond-len .991
-  let max-eq-bond-len 1.00907
+  let min-eq-bond-len 1.1 * ([sigma] of end1 + [sigma] of end2) / 2
+  let max-eq-bond-len 1.2 * ([sigma] of end1 + [sigma] of end2) / 2
   (ifelse
     link-length < min-eq-bond-len [
       let tmp-len sqrt(min-eq-bond-len - link-length)
@@ -623,7 +634,7 @@ f-app
 f-app
 0
 30
-0.7
+0.0
 .1
 1
 N
@@ -636,36 +647,26 @@ SWITCH
 161
 create-dislocation?
 create-dislocation?
-0
+1
 1
 -1000
 
 SWITCH
 895
-65
-1125
-98
-update-atom-color?
-update-atom-color?
+165
+1167
+198
+color-atoms-by-potential-energy?
+color-atoms-by-potential-energy?
 1
 1
 -1000
 
-CHOOSER
-895
-10
-1060
-55
-lattice-view
-lattice-view
-"large-atoms" "small-atoms" "hide-atoms"
-0
-
 SWITCH
 895
-100
+60
 1125
-133
+93
 show-diagonal-right-links?
 show-diagonal-right-links?
 0
@@ -674,23 +675,23 @@ show-diagonal-right-links?
 
 SWITCH
 895
-135
+95
 1125
-168
+128
 show-diagonal-left-links?
 show-diagonal-left-links?
-1
+0
 1
 -1000
 
 SWITCH
 895
-170
+130
 1125
-203
+163
 show-horizontal-links?
 show-horizontal-links?
-1
+0
 1
 -1000
 
@@ -703,7 +704,7 @@ atoms-per-row
 atoms-per-row
 5
 20
-13.0
+5.0
 1
 1
 NIL
@@ -718,7 +719,7 @@ atoms-per-column
 atoms-per-column
 5
 20
-13.0
+5.0
 1
 1
 NIL
@@ -950,9 +951,9 @@ HORIZONTAL
 
 BUTTON
 25
-350
+375
 167
-383
+408
 NIL
 select-atoms
 T
@@ -967,11 +968,11 @@ NIL
 
 BUTTON
 0
-385
+410
 100
-418
+443
 increase-size
-ask atoms with [selected?] [set sigma sigma + .1]
+ask atoms with [selected?] [\nset sigma sigma + .1\nset-size\n]\n\n
 NIL
 1
 T
@@ -984,11 +985,11 @@ NIL
 
 BUTTON
 105
-385
+410
 210
-418
+443
 decrease-size
-ask atoms with [selected?] [set sigma sigma - .1]
+ask atoms with [selected?] [\nset sigma max list 0.2 (sigma - .1)\nset-size\n]\n\n
 NIL
 1
 T
@@ -998,6 +999,53 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+895
+25
+1072
+58
+atom-viz-size
+atom-viz-size
+0
+1.1
+0.9
+.1
+1
+sigma
+HORIZONTAL
+
+BUTTON
+115
+295
+212
+328
+add-atoms
+add-atoms\ndisplay
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+SLIDER
+60
+330
+232
+363
+new-atom-sigma
+new-atom-sigma
+.2
+1.5
+0.3
+.1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1437,7 +1485,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.2.0
+NetLogo 6.2.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
