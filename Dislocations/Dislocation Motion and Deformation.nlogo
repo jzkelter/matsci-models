@@ -26,7 +26,7 @@ globals [
                     ; the units are also arbitrary.
   link-check-dist ; each atom links with neighbors within this distance
   prev-atom-viz-size  ; previous atom viz size
-  upper-left-fl ; upper left force line - shear
+  force-line-xcor ; upper left force line - shear
   left-fl ; left force line - tension, compression
   right-edge ; where the right side of the sample is (xcor) - tension,
              ; compression - used in determining length of sample
@@ -50,7 +50,7 @@ to setup
   clear-all
   set eps .07
 ;  set sigma .899 ; starts stress-strain curve at about 0
-  set cutoff-dist 5
+  set cutoff-dist 2.5
   set dt .1
   set sqrt-2-kb-over-m (1 / 50)
   set link-check-dist 1.5
@@ -64,20 +64,96 @@ to init-atom
   set shape "circle"
   set color blue
   set mass 1
-  set sigma .899  ; sigma of .899 start stress-strain curve at about 0
+  set sigma .9  ; sigma of .899 start stress-strain curve at about 0
   set pinned? False
   set ex-force-applied? False
   set selected? false
   set-size
 end
+
+
+
+
+
+to set-pinned-and-externally-forced-under-shear
+  let x-min min [xcor] of atoms
+  let x-max max [xcor] of atoms
+  let y-min min [ycor] of atoms
+  let y-max max [ycor] of atoms
+
+  ;; Set up which atoms are pinned
+  ask atoms with [
+        ((xcor <= x-min + 0.5 or xcor >= x-max - 0.5) and ( ycor <= y-min + 1)) ; bottom two atoms on left and on right
+        or (ycor = y-min)  ; bottom row atoms
+  ] [
+    set pinned? true
+  ]
+
+  ;; Set up force lines
+  set force-line-xcor min [xcor] of atoms
+  create-fl-ends 1 [
+    set xcor force-line-xcor
+    set ycor y-max + 2
+  ]
+
+  create-fl-ends 1 [
+    set xcor force-line-xcor
+    set ycor min [ycor] of atoms with [xcor = force-line-xcor and not pinned?]
+    hide-turtle
+    create-fl-link-with one-of other fl-ends
+  ]
+
+  ask fl-ends  [
+    set color white
+    set heading 90
+  ]
+
+  ;; Set which atoms get an external force applied
+  ask atoms [ set ex-force-applied?  false ]
+  let forced-atoms atoms with [ ycor >= y-min + 2 and (distancexy force-line-xcor ycor) <= 1]
+  set num-forced-atoms count forced-atoms
+  ask forced-atoms [
+    set ex-force-applied?  true
+  ]
+
+end
+
+to set-pinned-and-externally-forced-under-tension
+  let x-min min [xcor] of atoms
+  let x-max max [xcor] of atoms
+  let y-min min [ycor] of atoms
+  let y-max max [ycor] of atoms
+
+  ask atoms with [xcor = x-min] [die] ; creating the symmetrical shape
+  set x-min min [xcor] of atoms
+  ask atoms with [
+    (ycor >= y-max - 1 or ycor <= y-min + 1) and
+    xcor <= x-max - 3.5 and
+    xcor >= x-min + 3.5
+  ] [ die ]
+
+  ask atoms with [xcor = x-max or xcor = x-max - .5 ] [set pinned? True]
+  ; defining top and bottom neck agentsets
+  set top-neck-atoms atoms with [xcor <= x-max - 3.5 and xcor >= x-min + 3.5] with-max [ycor]
+  set bottom-neck-atoms atoms with [xcor <= x-max - 3.5 and xcor >= x-min + 3.5] with-min [ycor]
+  ask atoms with [ xcor >= x-min and xcor <= x-min + 3 ][
+    set ex-force-applied? true
+    set shape "circle-dot"
+  ]
+  set num-forced-atoms count atoms with [ex-force-applied?]
+end
+
+
 to setup-atoms-and-links-and-force-lines
   ; making a symmetrical sample for tension mode
   if force-mode = "Tension" and atoms-per-column mod 2 = 0 [
     set atoms-per-column atoms-per-column + 1
   ]
+
   create-atoms atoms-per-row * atoms-per-column [
     init-atom
   ]
+
   let x-dist 1 ; the distance between atoms in the x direction
   let y-dist sqrt (x-dist ^ 2 - (x-dist / 2) ^ 2) ; the distance between rows
   let ypos (- atoms-per-column * y-dist / 2) ;the y position of the first atom
@@ -101,43 +177,10 @@ to setup-atoms-and-links-and-force-lines
   let median-xcor (median [xcor] of atoms)
   set median-ycor (median [ycor] of atoms)
 
-  (ifelse force-mode = "Shear"[
-    ask atoms with [
-      (
-        (xcor = x-min or
-          xcor = x-min + (1 / 2) or
-          xcor = xmax or
-          xcor = xmax - (1 / 2)
-        )
-        and
-        ( ycor < median-ycor)
-      )
-    ] [
-      set pinned? True
-      ]
-    ]
-    force-mode = "Tension"[
-      ask atoms with [xcor = x-min] [die] ; creating the symmetrical shape
-      set x-min min [xcor] of atoms
-      ask atoms with [
-        (ycor >= ymax - 1 or ycor <= y-min + 1) and
-         xcor <= xmax - 3.5 and
-         xcor >= x-min + 3.5
-      ] [ die ]
-
-      ask atoms with [xcor = xmax or xcor = xmax - .5 ] [set pinned? True]
-      ; defining top and bottom neck agentsets
-      set top-neck-atoms atoms with [xcor <= xmax - 3.5 and xcor >= x-min + 3.5] with-max [ycor]
-      set bottom-neck-atoms atoms with [xcor <= xmax - 3.5 and xcor >= x-min + 3.5] with-min [ycor]
-      ask atoms with [ xcor >= x-min and xcor <= x-min + 3 ][
-        set ex-force-applied? True
-        set shape "circle-dot"
-      ]
-      set num-forced-atoms count atoms with [ex-force-applied?]
-    ]
-    force-mode = "Compression" [
-      ask atoms with [xcor = xmax or xcor = xmax - .5 ] [set pinned? True]
-    ]
+  (ifelse
+    force-mode = "Shear" [set-pinned-and-externally-forced-under-shear]
+    force-mode = "Tension" [set-pinned-and-externally-forced-under-tension]
+    force-mode = "Compression" [ask atoms with [xcor = xmax or xcor = xmax - .5 ] [set pinned? True]]
   )
 
   if create-dislocation? [ ; creating the dislocation
@@ -163,6 +206,7 @@ to setup-atoms-and-links-and-force-lines
     let in-radius-atoms (other atoms in-radius cutoff-dist)
     update-links in-radius-atoms
   ]
+
   ask atom-links [ ; stylizing/coloring links
     color-links
   ]
@@ -205,19 +249,6 @@ to setup-atoms-and-links-and-force-lines
       ]
     ]
     force-mode = "Shear" [
-      create-fl-ends 2
-      set upper-left-fl min [xcor] of atoms with [ ycor >= median-ycor ]
-      ask one-of fl-ends with [xcor = 0 and ycor = 0] [
-        set xcor upper-left-fl
-        set ycor ymax + 2 ]
-      ask one-of fl-ends with [xcor = 0 and ycor = 0] [
-        set xcor upper-left-fl
-        set ycor median-ycor
-        hide-turtle
-        create-fl-link-with one-of other fl-ends]
-      ask fl-ends [
-        set color white
-        set heading 90 ]
   ])
   ask fl-links [
     set color white
@@ -308,14 +339,17 @@ to add-atoms
   if mouse-down? and not any? atoms with [distancexy mouse-xcor mouse-ycor < .2] [
     let closest-atom min-one-of atoms [distancexy mouse-xcor mouse-ycor]
     let new-atom-force last [LJ-potential-and-force (distancexy mouse-xcor mouse-ycor) sigma new-atom-sigma] of closest-atom
-    if abs new-atom-force < 20 [
+    ifelse abs new-atom-force < 20 [
 
       create-atoms 1 [
         init-atom
         set sigma new-atom-sigma
         set-size
+        set color read-from-string new-atom-color
         setxy mouse-xcor mouse-ycor
       ]
+    ] [
+      user-message "adding that atom there will make things explode"
     ]
   ]
 end
@@ -346,8 +380,8 @@ end
 
 to calculate-fl-positions ; (calculate new force line positions)
   ifelse force-mode = "Shear" [
-    set upper-left-fl min [xcor] of atoms with [ ycor >= median-ycor ]
-    ask fl-ends [ set xcor upper-left-fl]
+    set force-line-xcor min [xcor] of atoms with [ ycor >= median-ycor ]
+    ask fl-ends [ set xcor force-line-xcor]
   ]
   [ ; force-mode = tension or compression
     set left-fl min [xcor] of atoms
@@ -365,13 +399,8 @@ end
 
 ; find the atoms closest to the force line that will be the ones receiving the external force
 to identify-force-atoms
+
   (ifelse force-mode = "Shear" [
-    ask atoms [ set ex-force-applied?  False ]
-    let forced-atoms atoms with [ ycor >= median-ycor and (distancexy upper-left-fl ycor) <= 1]
-    set num-forced-atoms count forced-atoms
-    ask forced-atoms [
-      set ex-force-applied?  True
-    ]
     ]
     force-mode = "Compression" [
       ask atoms [ set ex-force-applied?  False ]
@@ -521,11 +550,11 @@ end
 to color-links
   set thickness .25 ; necessary because the links die and reform every tick
   let min-eq-bond-len 1.1 * ([sigma] of end1 + [sigma] of end2) / 2
-  let max-eq-bond-len 1.2 * ([sigma] of end1 + [sigma] of end2) / 2
+  let max-eq-bond-len 1.15 * ([sigma] of end1 + [sigma] of end2) / 2
   (ifelse
     link-length < min-eq-bond-len [
       let tmp-len sqrt(min-eq-bond-len - link-length)
-      let tmp-color extract-rgb scale-color red tmp-len 1 (-.2 * red-intensity)
+      let tmp-color extract-rgb scale-color red tmp-len 1 (-.2)
       set color insert-item 3 tmp-color (125 + (1 + tmp-len) * 30) ]
     link-length > max-eq-bond-len [
       let tmp-len sqrt (link-length - max-eq-bond-len)
@@ -612,14 +641,14 @@ force-mode
 
 SLIDER
 5
-460
+500
 177
-493
+533
 system-temp
 system-temp
 0
 .4
-0.346
+0.054
 .001
 1
 NIL
@@ -627,9 +656,9 @@ HORIZONTAL
 
 SLIDER
 5
-503
+543
 177
-536
+576
 f-app
 f-app
 0
@@ -647,7 +676,7 @@ SWITCH
 161
 create-dislocation?
 create-dislocation?
-1
+0
 1
 -1000
 
@@ -680,7 +709,7 @@ SWITCH
 128
 show-diagonal-left-links?
 show-diagonal-left-links?
-0
+1
 1
 -1000
 
@@ -691,7 +720,7 @@ SWITCH
 163
 show-horizontal-links?
 show-horizontal-links?
-0
+1
 1
 -1000
 
@@ -704,7 +733,7 @@ atoms-per-row
 atoms-per-row
 5
 20
-5.0
+9.0
 1
 1
 NIL
@@ -719,7 +748,7 @@ atoms-per-column
 atoms-per-column
 5
 20
-5.0
+8.0
 1
 1
 NIL
@@ -903,7 +932,7 @@ SWITCH
 93
 auto-increment-tension?
 auto-increment-tension?
-0
+1
 1
 -1000
 
@@ -934,26 +963,11 @@ NIL
 NIL
 0
 
-SLIDER
-11
-564
-183
-597
-red-intensity
-red-intensity
-1
-2
-1.0
-.1
-1
-NIL
-HORIZONTAL
-
 BUTTON
 25
-375
+415
 167
-408
+448
 NIL
 select-atoms
 T
@@ -968,9 +982,9 @@ NIL
 
 BUTTON
 0
-410
+450
 100
-443
+483
 increase-size
 ask atoms with [selected?] [\nset sigma sigma + .1\nset-size\n]\n\n
 NIL
@@ -985,9 +999,9 @@ NIL
 
 BUTTON
 105
-410
+450
 210
-443
+483
 decrease-size
 ask atoms with [selected?] [\nset sigma max list 0.2 (sigma - .1)\nset-size\n]\n\n
 NIL
@@ -1009,7 +1023,7 @@ atom-viz-size
 atom-viz-size
 0
 1.1
-0.9
+0.8
 .1
 1
 sigma
@@ -1033,19 +1047,29 @@ NIL
 0
 
 SLIDER
-60
+10
 330
-232
+215
 363
 new-atom-sigma
 new-atom-sigma
 .2
-1.5
+1.1
 0.3
 .1
 1
 NIL
 HORIZONTAL
+
+CHOOSER
+10
+365
+148
+410
+new-atom-color
+new-atom-color
+"yellow" "green" "orange"
+2
 
 @#$#@#$#@
 ## WHAT IS IT?
