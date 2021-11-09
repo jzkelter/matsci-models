@@ -1,3 +1,4 @@
+extensions [profiler]
 breed [atoms atom]
 breed [fl-ends fl-end] ; turtles at the ends of the force lines, point in direction the force is acting
 undirected-link-breed [fl-links fl-link] ; force line links
@@ -6,6 +7,9 @@ undirected-link-breed [atom-links atom-link] ; links between atoms
 atoms-own [
   fx     ; x-component of force vector from last time step
   fy     ; y-component of force vector from last time step
+  new-fx ; x-component of force vector currently being calculated (both this and fx are needed for Verlet aintegration)
+  new-fy ; y-component of force vector currently being calculated (both this and fy are needed for Verlet aintegration)
+  atoms-in-half-circle
   vx     ; x-component of velocity vector
   vy     ; y-component of velocity vector
   mass   ; mass of atom
@@ -14,11 +18,11 @@ atoms-own [
   ex-force-applied? ; is an external force directly applied to this atom? False if no, True if yes
   pot-E ; Potential energy of the atom
   selected? ; whether the atom is selected or  not to change its size
-  base-color  ; display color for the atom when it isn't selected
 ]
 
 globals [
   eps ; used in LJ force. Well depth; measure of how strongly particles attract each other
+  ; sigma ; used in LJ force. Distance at which intermolecular potential between 2 particles is 0
   cutoff-dist ; each atom is influenced by its neighbors within this distance (LJ force)
   dt ; time step for the velocity verlet algorithm
   sqrt-2-kb-over-m  ; constant. Used when calculating the thermal velocity. Square root of
@@ -62,7 +66,6 @@ end
 
 to init-atom
   set shape "circle"
-  set base-color blue
   set color blue
   set mass 1
   set sigma .9  ; sigma of .899 start stress-strain curve at about 0
@@ -280,6 +283,37 @@ end
 ;; Runtime Procedures ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;
 
+to update-force-half-atoms
+  ask atoms [update-force-and-links]
+  ask atoms [update-velocity]
+end
+
+to update-force-all-atoms
+  ask atoms [update-force-and-velocity-and-links]
+end
+
+to call-both-force-updates
+  update-force-half-atoms
+  update-force-all-atoms
+end
+
+to profile-updating-force
+  profiler:reset
+  profiler:start
+  repeat 5000 [update-force-half-atoms]
+  profiler:stop
+  print profiler:report
+end
+
+to profile-go
+  profiler:reset
+  profiler:start
+  repeat 500 [go]
+  profiler:stop
+  print word "half-calc? is " half-calc?
+  print profiler:report
+end
+
 
 to go
   ;if lattice-view != prev-lattice-view [
@@ -298,7 +332,21 @@ to go
   if force-mode = "Tension" and auto-increment-tension? [ adjust-force ]
   identify-force-atoms
 
-  ask atoms [update-force-and-velocity-and-links]
+  ifelse half-calc? [
+    ask atoms [
+      set pot-E 0
+      set atoms-in-half-circle find-atom-in-half-circle
+    ]
+    ask atoms [update-force-and-links]
+    ask atoms [
+      update-velocity
+      update-atom-color pot-E
+      update-links atoms-in-half-circle
+    ]
+
+  ] [
+    ask atoms [update-force-and-velocity-and-links]
+  ]
 
   ask atom-links [ ; stylizing/coloring links
     color-links
@@ -349,8 +397,7 @@ to add-atoms
         init-atom
         set sigma new-atom-sigma
         set-size
-        set base-color read-from-string new-atom-color
-        set color base-color
+        set color read-from-string new-atom-color
         setxy mouse-xcor mouse-ycor
       ]
     ] [
@@ -358,27 +405,22 @@ to add-atoms
     ]
   ]
 end
-
 to select-atoms
   if mouse-down? [
+;    ask atoms with [xcor <= mouse-xcor + .5 and xcor > mouse-xcor - .5
+;                and ycor <= mouse-ycor + .433 and ycor > mouse-ycor - .433 ] [
     ask atoms with [distancexy mouse-xcor mouse-ycor < size / 2] [
       set selected? not selected?
-      set-shape
+      set-selected-color
     ]
   ]
   display
   wait .1
 end
 
-to set-shape
-  ifelse selected? [
-    ;set shape "circle 2"
-    set shape "circle-s"
-  ] [
-    set shape "circle"
-  ]
+to set-selected-color
+  set color ifelse-value selected? [red] [blue]
 end
-
 
 to move  ; atom procedure, uses velocity-verlet algorithm
   set xcor velocity-verlet-pos xcor vx (fx / mass)
@@ -433,6 +475,66 @@ to adjust-force
 end
 
 
+to-report find-atom-in-half-circle
+  report other atoms in-radius cutoff-dist with [
+    ycor > [ycor] of myself   ; using only neighboring atoms on one side cuts in half.
+    or (ycor = [ycor] of myself and xcor < [xcor] of myself)  ; if other atom is exactly on the same ycor, only include it if is to the left
+  ]
+end
+
+
+to update-force-and-links
+  ;let atoms-in-half-circle find-atom-in-half-circle
+
+  ask atoms-in-half-circle [
+    let r distance myself
+    let indiv-pot-E-and-force (LJ-potential-and-force r sigma [sigma] of myself)
+    let force item 1 indiv-pot-E-and-force
+    face myself
+    rt 180
+    let f-x force * dx
+    let f-y force * dy
+
+    ask myself [
+      set new-fx new-fx + f-x
+      set new-fy new-fy + f-y
+      set pot-E pot-E + item 0 indiv-pot-E-and-force / 2
+    ]
+
+    set new-fx new-fx - f-x
+    set new-fy new-fy - f-y
+    set pot-E pot-E + item 0 indiv-pot-E-and-force / 2
+
+  ]
+
+end
+
+to update-velocity
+  if not pinned? [
+    ; adjusting the forces to account for any external applied forces
+    let ex-force 0
+    if ex-force-applied? [
+      if force-mode = "Tension" and auto-increment-tension? [
+        set equalizing-LJ-force equalizing-LJ-force - new-fx
+        set new-fx 0
+        set new-fy 0
+      ]
+      set ex-force report-new-force
+    ]
+    if shape = "circle-dot" and not ex-force-applied? [ set shape "circle" ]
+    set new-fx ex-force + new-fx
+
+    ; updating velocity
+    set vx velocity-verlet-velocity vx (fx / mass) (new-fx / mass)
+    set vy velocity-verlet-velocity vy (fy / mass) (new-fy / mass)
+    ; update current force to be what was calculated this tick
+    set fx new-fx
+    set fy new-fy
+    set new-fx 0
+    set new-fy 0
+  ]
+end
+
 to update-force-and-velocity-and-links
   let n-fx 0
   let n-fy 0
@@ -477,13 +579,10 @@ to update-force-and-velocity-and-links
 end
 
 to update-atom-color [atom-PE] ; updating atom color
-
-  ifelse color-atoms-by-potential-energy? [
-    set color scale-color color  atom-PE -.45 0
-  ] [
-    set color base-color
+  (ifelse color-atoms-by-potential-energy? [
+    set-color atom-PE
   ]
-
+   [ set-selected-color ])
 end
 
 to update-links [in-radius-atoms] ; updating links
@@ -497,6 +596,8 @@ to update-links [in-radius-atoms] ; updating links
   ]
   if show-horizontal-links? [
     set heading 90
+    link-with-atoms-in-cone in-radius-atoms
+    set heading 270
     link-with-atoms-in-cone in-radius-atoms
   ]
 
@@ -538,6 +639,10 @@ to-report velocity-verlet-velocity [v a new-a]  ; velocity, acceleration, new ac
   report v + (1 / 2) * (new-a + a) * dt
 end
 
+to set-color [v]
+  let base-color ifelse-value selected? [red] [blue]
+  set color scale-color base-color  v -.45 0
+end
 
 to-report strain ; tension only
   report ((right-edge - left-fl) - orig-length) / orig-length
@@ -698,7 +803,7 @@ SWITCH
 198
 color-atoms-by-potential-energy?
 color-atoms-by-potential-energy?
-1
+0
 1
 -1000
 
@@ -720,7 +825,7 @@ SWITCH
 128
 show-diagonal-left-links?
 show-diagonal-left-links?
-1
+0
 1
 -1000
 
@@ -731,7 +836,7 @@ SWITCH
 163
 show-horizontal-links?
 show-horizontal-links?
-1
+0
 1
 -1000
 
@@ -1066,7 +1171,7 @@ new-atom-sigma
 new-atom-sigma
 .2
 1.1
-1.1
+0.3
 .1
 1
 NIL
@@ -1081,6 +1186,17 @@ new-atom-color
 new-atom-color
 "yellow" "green" "orange"
 2
+
+SWITCH
+1200
+85
+1317
+118
+half-calc?
+half-calc?
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1297,21 +1413,6 @@ true
 0
 Circle -7500403 true true 0 0 300
 Circle -16777216 true false 88 88 124
-
-circle-s
-false
-0
-Circle -7500403 true true 0 0 300
-Line -1 false 210 60 120 60
-Line -1 false 90 90 90 120
-Line -1 false 120 150 180 150
-Line -1 false 210 180 210 210
-Line -1 false 90 240 180 240
-Line -7500403 true 90 90 120 60
-Line -1 false 120 60 90 90
-Line -1 false 90 120 120 150
-Line -1 false 180 150 210 180
-Line -1 false 210 210 180 240
 
 circle-x
 false
