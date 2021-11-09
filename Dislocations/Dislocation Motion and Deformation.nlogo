@@ -1,18 +1,21 @@
+extensions [profiler]
 breed [atoms atom]
 breed [fl-ends fl-end] ; turtles at the ends of the force lines, point in direction the force is acting
 undirected-link-breed [fl-links fl-link] ; force line links
 undirected-link-breed [atom-links atom-link] ; links between atoms
 
 atoms-own [
-  fx     ; x-component of force vector
-  fy     ; y-component of force vector
+  fx     ; x-component of force vector from last time step
+  fy     ; y-component of force vector from last time step
+  new-fx ; x-component of force vector currently being calculated (both this and fx are needed for Verlet aintegration)
+  new-fy ; 7-component of force vector currently being calculated (both this and fy are needed for Verlet aintegration)
   vx     ; x-component of velocity vector
   vy     ; y-component of velocity vector
   mass   ; mass of atom
-  sigma  ; distnace at which intermolecular potential between 2 atoms of this type is 0 (if they are different, we average their sigmas)
+  sigma  ; distnace at which intermolecular potential between 2 atoms of this typot-E is 0 (if they are different, we average their sigmas)
   pinned? ; False if the atom isn't pinned in place, True if it is (for boundaries)
   ex-force-applied? ; is an external force directly applied to this atom? False if no, True if yes
-  total-PE ; Potential energy of the atom
+  pot-E ; Potential energy of the atom
   selected? ; whether the atom is selected or  not to change its size
 ]
 
@@ -26,7 +29,7 @@ globals [
                     ; the units are also arbitrary.
   link-check-dist ; each atom links with neighbors within this distance
   prev-atom-viz-size  ; previous atom viz size
-  force-line-xcor ; upper left force line - shear
+  force-line-xcor ; uppot-Er left force line - shear
   left-fl ; left force line - tension, compression
   right-edge ; where the right side of the sample is (xcor) - tension,
              ; compression - used in determining length of sample
@@ -258,12 +261,12 @@ to setup-atoms-and-links-and-force-lines
 end
 
 to init-velocity ; initializes velocity for each atom based on the initial system-temp. Creates a
-                 ; random aspect in the velocity split between the x velocity and the y velocity
-  let speed-avg sqrt-2-kb-over-m * sqrt system-temp
+                 ; random aspot-Ect in the velocity split between the x velocity and the y velocity
+  let spot-Eed-avg sqrt-2-kb-over-m * sqrt system-temp
   ask unpinned-atoms [
     let x-portion random-float 1
-    set vx speed-avg * x-portion * positive-or-negative
-    set vy speed-avg * (1 - x-portion) * positive-or-negative]
+    set vx spot-Eed-avg * x-portion * positive-or-negative
+    set vy spot-Eed-avg * (1 - x-portion) * positive-or-negative]
   if force-mode = "Tension" [
     ask atoms with [ ex-force-applied? ]  [
       set vx 0
@@ -279,23 +282,50 @@ end
 ;; Runtime Procedures ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;
 
+to update-force-half-atoms
+  ask atoms [update-force-and-links]
+  ask atoms [update-velocity]
+end
+
+to update-force-all-atoms
+  ask atoms [update-force-and-velocity-and-links]
+end
+
+to call-both-force-updates
+  update-force-half-atoms
+  update-force-all-atoms
+end
+
+to profile-updating-force
+  profiler:reset
+  profiler:start
+  repeat 5000 [update-force-half-atoms]
+  profiler:stop
+  print profiler:report
+end
+
+
 to go
   ;if lattice-view != prev-lattice-view [
     update-lattice-view
   ;]
   set equalizing-LJ-force 0
   control-temp
+
   ask atom-links [ die ]
-  ; moving happens before velocity and force update in accordance with velocity verlet
+  ; moving happot-Ens before velocity and force update in accordance with velocity verlet
+
   ask unpinned-atoms [
     move
   ]
   calculate-fl-positions
   if force-mode = "Tension" and auto-increment-tension? [ adjust-force ]
   identify-force-atoms
-  ask atoms [
-    update-force-and-velocity-and-links
-  ]
+
+  ask atoms [update-force-and-links]
+  ask atoms [update-velocity]
+  ;ask atoms [update-force-and-velocity-and-links]
+
   ask atom-links [ ; stylizing/coloring links
     color-links
   ]
@@ -314,12 +344,12 @@ to set-size
   set size sigma * atom-viz-size
 end
 
-; this heats or cools the system based on the average temperature of the system compared to the set system-temp
+; this heats or cools the system based on the average tempot-Erature of the system compared to the set system-temp
 to control-temp
-  let current-speed-avg mean [ sqrt (vx ^ 2 + vy ^ 2) ] of unpinned-atoms
-  let target-speed-avg sqrt-2-kb-over-m * sqrt system-temp
-  if current-speed-avg != 0 [
-    let scaling-factor target-speed-avg / current-speed-avg
+  let current-spot-Eed-avg mean [ sqrt (vx ^ 2 + vy ^ 2) ] of unpinned-atoms
+  let target-spot-Eed-avg sqrt-2-kb-over-m * sqrt system-temp
+  if current-spot-Eed-avg != 0 [
+    let scaling-factor target-spot-Eed-avg / current-spot-Eed-avg
     ask unpinned-atoms [
       set vx vx * scaling-factor
       set vy vy * scaling-factor
@@ -422,46 +452,111 @@ to adjust-force
   set prev-length (right-edge - left-fl)
 end
 
+
+to-report find-atom-in-half-circle
+  report other atoms in-radius cutoff-dist with [
+    ycor > [ycor] of myself   ; using only neighboring atoms on one side cuts in half.
+    or (ycor = [ycor] of myself and xcor < [xcor] of myself)  ; if other atom is exactly on the same ycor, only include it if is to the left
+  ]
+end
+
+
+to update-force-and-links
+  let total-potential-energy 0
+  let atoms-in-half-circle find-atom-in-half-circle
+
+  ask atoms-in-half-circle [
+    let r distance myself
+    let indiv-pot-E-and-force (LJ-potential-and-force r sigma [sigma] of myself)
+    let force item 1 indiv-pot-E-and-force
+    set total-potential-energy total-potential-energy + item 0 indiv-pot-E-and-force
+    face myself
+    rt 180
+    let f-x force * dx
+    let f-y force * dy
+
+    ask myself [
+      set new-fx new-fx + f-x
+      set new-fy new-fy + f-y
+    ]
+
+    set new-fx new-fx - f-x
+    set new-fy new-fy - f-y
+
+  ]
+
+  set pot-E total-potential-energy
+
+  update-atom-color pot-E
+  update-links atoms-in-half-circle
+end
+
+to update-velocity
+  if not pinned? [
+    ; adjusting the forces to account for any external applied forces
+    let ex-force 0
+    if ex-force-applied? [
+      if force-mode = "Tension" and auto-increment-tension? [
+        set equalizing-LJ-force equalizing-LJ-force - new-fx
+        set new-fx 0
+        set new-fy 0
+      ]
+      set ex-force report-new-force
+    ]
+    if shape = "circle-dot" and not ex-force-applied? [ set shape "circle" ]
+    set new-fx ex-force + new-fx
+
+    ; updating velocity
+    set vx velocity-verlet-velocity vx (fx / mass) (new-fx / mass)
+    set vy velocity-verlet-velocity vy (fy / mass) (new-fy / mass)
+    ; update current force to be what was calculated this tick
+    set fx new-fx
+    set fy new-fy
+    set new-fx 0
+    set new-fy 0
+  ]
+end
+
 to update-force-and-velocity-and-links
-  let new-fx 0
-  let new-fy 0
+  let n-fx 0
+  let n-fy 0
   let total-potential-energy 0
   let in-radius-atoms other atoms in-radius cutoff-dist
   ask in-radius-atoms [
     ; each atom calculates the force it feels from its
     ; neighboring atoms and sums these forces
     let r distance myself
-    let indiv-PE-and-force (LJ-potential-and-force r sigma [sigma] of myself)
-    let force item 1 indiv-PE-and-force
-    set total-potential-energy total-potential-energy + item 0 indiv-PE-and-force
+    let indiv-pot-E-and-force (LJ-potential-and-force r sigma [sigma] of myself)
+    let force item 1 indiv-pot-E-and-force
+    set total-potential-energy total-potential-energy + item 0 indiv-pot-E-and-force
     face myself
     rt 180
-    set new-fx new-fx + (force * dx)
-    set new-fy new-fy + (force * dy)
+    set n-fx n-fx + (force * dx)
+    set n-fy n-fy + (force * dy)
     ]
-  set total-PE total-potential-energy
+  set pot-E total-potential-energy / 2  ; divide by 2 to not double count pot-E for each atom
 
   if not pinned? [
     ; adjusting the forces to account for any external applied forces
     let ex-force 0
     if ex-force-applied? [
      if force-mode = "Tension" and auto-increment-tension? [
-        set equalizing-LJ-force equalizing-LJ-force - new-fx
-        set new-fx 0
-        set new-fy 0
+        set equalizing-LJ-force equalizing-LJ-force - n-fx
+        set n-fx 0
+        set n-fy 0
       ]
       set ex-force report-new-force ]
     if shape = "circle-dot" and not ex-force-applied? [ set shape "circle" ]
-    set new-fx ex-force + new-fx
+    set n-fx ex-force + n-fx
 
     ; updating velocity and force
-    set vx velocity-verlet-velocity vx (fx / mass) (new-fx / mass)
-    set vy velocity-verlet-velocity vy (fy / mass) (new-fy / mass)
-    set fx new-fx
-    set fy new-fy
+    set vx velocity-verlet-velocity vx (fx / mass) (n-fx / mass)
+    set vy velocity-verlet-velocity vy (fy / mass) (n-fy / mass)
+    set fx n-fx
+    set fy n-fy
   ]
 
-  update-atom-color total-PE
+  update-atom-color pot-E
   update-links in-radius-atoms
 end
 
@@ -676,7 +771,7 @@ SWITCH
 161
 create-dislocation?
 create-dislocation?
-0
+1
 1
 -1000
 
@@ -1509,7 +1604,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.2.1
+NetLogo 6.2.2
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
