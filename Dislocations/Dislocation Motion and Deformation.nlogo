@@ -40,6 +40,8 @@ globals [
   num-forced-atoms ; number of atoms receiving external force directly
   unpinned-atoms ; atoms that are not pinned
   equalizing-LJ-force ; force to counteract LJ forces in the x-direction (tension)
+  LJ-force-cutoff-values  ; since sizes can change, we store the cutoff adjustment values for different sizes of atom pairs
+  LJ-pot-cutoff-values  ; since sizes can change, we store the cutoff adjustment values for different sizes of atom pairs
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;
@@ -55,8 +57,25 @@ to setup
   set link-check-dist 1.5
   setup-atoms-and-links-and-force-lines
   init-velocity
+
+  set LJ-pot-cutoff-values n-values 41 [0]  ; initialize to zeros so zero as cutoff value will be used in the calculation on next line
+  set LJ-force-cutoff-values n-values 41 [0] ; initialize to zeros so zero as cutoff value will be used in the calculation on next line
+
+
+  set LJ-pot-cutoff-values map  [s -> first LJ-potential-and-force cutoff-dist s s] (range 0 2.05 .05)  ; calculate cutoff values to adjust LJ potential various sigma values
+  set LJ-force-cutoff-values map  [s -> last LJ-potential-and-force cutoff-dist s s] (range 0 2.05 .05)  ; calculate cutoff values to adjust LJ for various sigma values
   reset-ticks
 end
+
+
+to-report LJ-force-cutoff [sig]
+  report item round (sig / .05) LJ-force-cutoff-values
+end
+
+to-report LJ-pot-cutoff [sig]
+  report item round (sig / .05) LJ-pot-cutoff-values
+end
+
 
 
 
@@ -557,8 +576,8 @@ to-report LJ-potential-and-force [ r sigma1 sigma2] ; for the force, positive = 
   let third-power (sig / r) ^ 3
   let sixth-power third-power ^ 2
   let twelfth-power sixth-power ^ 2
-  let force (-48 * eps / r ) * (twelfth-power - (1 / 2) * sixth-power) + .0001
-  let potential (4 * eps * (twelfth-power - sixth-power)) + .00001
+  let force (-48 * eps / r ) * (twelfth-power - (1 / 2) * sixth-power) - LJ-force-cutoff sig
+  let potential (4 * eps * (twelfth-power - sixth-power)) - LJ-pot-cutoff sig
   report list potential force
 end
 
@@ -706,7 +725,7 @@ f-app
 f-app
 0
 30
-1.2
+0.0
 .1
 1
 N
