@@ -729,10 +729,10 @@ NIL
 1
 
 BUTTON
-103
-257
-188
-290
+100
+255
+185
+288
 NIL
 go
 T
@@ -764,7 +764,7 @@ system-temp
 system-temp
 0
 .4
-0.369
+0.194
 .001
 1
 NIL
@@ -792,7 +792,7 @@ SWITCH
 161
 create-dislocation?
 create-dislocation?
-1
+0
 1
 -1000
 
@@ -803,7 +803,7 @@ SWITCH
 198
 color-atoms-by-potential-energy?
 color-atoms-by-potential-energy?
-0
+1
 1
 -1000
 
@@ -814,7 +814,7 @@ SWITCH
 93
 show-diagonal-right-links?
 show-diagonal-right-links?
-0
+1
 1
 -1000
 
@@ -836,7 +836,7 @@ SWITCH
 163
 show-horizontal-links?
 show-horizontal-links?
-0
+1
 1
 -1000
 

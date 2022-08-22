@@ -518,7 +518,7 @@ GRAPHICS-WINDOW
 1
 0
 1
-0
+1
 1
 -12
 12
@@ -601,7 +601,7 @@ SWITCH
 113
 create-dislocation?
 create-dislocation?
-0
+1
 1
 -1000
 
@@ -634,7 +634,7 @@ SWITCH
 113
 show-diagonal-left-links?
 show-diagonal-left-links?
-1
+0
 1
 -1000
 
@@ -645,7 +645,7 @@ SWITCH
 148
 show-horizontal-links?
 show-horizontal-links?
-1
+0
 1
 -1000
 
@@ -658,7 +658,7 @@ atoms-per-row
 atoms-per-row
 5
 15
-12.0
+11.0
 1
 1
 NIL
@@ -673,7 +673,7 @@ atoms-per-column
 atoms-per-column
 5
 15
-10.0
+11.0
 1
 1
 NIL
@@ -920,7 +920,7 @@ new-atom-sigma
 new-atom-sigma
 .2
 1.1
-0.6
+0.9
 .1
 1
 NIL
@@ -934,7 +934,7 @@ CHOOSER
 new-atom-color
 new-atom-color
 "yellow" "green" "orange" "blue"
-0
+3
 
 TEXTBOX
 0
