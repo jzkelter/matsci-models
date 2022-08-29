@@ -10,12 +10,12 @@ nuclei-own [
   charge
   mass
   Vx
+  Ax
 ]
 
 
 patches-own [
   n-potential
-  e-potential
   pcharge
 ]
 
@@ -78,12 +78,10 @@ to make-e-pieces
       set charge -1 / e-pieces-per-nucleus
       set color green
       set size .4
-      add-charge-and-potential-to-patch
+      add-charge-to-patch
 
       move-to-lowest-potential
       ht
-      ; random-move
-      ; e-move
     ]
   ]
 end
@@ -97,6 +95,7 @@ to go
   ask e-pieces [move-to-lowest-potential]
   color-patches-by-e-density
 
+
   ask nuclei [update-velocity]
   ask nuclei [move]
 
@@ -105,17 +104,15 @@ end
 
 
 to update-velocity
-  let Ax calc-force / mass
+  set Ax calc-force / mass
   set Vx Vx + Ax
 end
 
 to move ;; nuclei procedure
-  ifelse Vx > 0 [
-    set heading 90
-  ] [
-    set heading -90
-  ]
-  fd Vx
+
+  set heading 90  ; face positive x
+
+  fd Ax
 end
 
 
@@ -124,25 +121,46 @@ to-report calc-force  ; nucleus procedure
 end
 
 to-report other-nuclei-force
-;  report sum [k * (charge * [charge] of myself) / ([xcor] of myself - xcor)] of other nuclei
   report coulomb-force other nuclei
 end
 
-to-report e-piece-force
-;  ask e-pieces [face myself]
+;to-report e-piece-force
+;  report coulomb-force patches with [pcharge != 0]
+;end
+
+;to-report coulomb-force [agent-set]
+;  ask agent-set [face myself]
 ;  report sum
 ;  [
-;    dx * k * (charge * [charge] of myself) / (distance myself)
-;  ] of e-pieces
-  report coulomb-force e-pieces
+;    dx * k * (charge * [charge] of myself) / ((distance myself) ^ 2)
+;  ] of agent-set
+;end
+
+to-report e-piece-force
+  let total 0
+  ask patches with [pcharge != 0] [
+    let this-patch self
+    ask myself [
+      face this-patch
+      rt 180
+    ]
+    let x-component [dx] of myself
+    set total total + (x-component * k * (pcharge * [charge] of myself) / ((distance myself) ^ 2))
+  ]
+  report total
 end
 
 to-report coulomb-force [agent-set]
-  ask agent-set [face myself]
-  report sum
-  [
-    dx * k * (charge * [charge] of myself) / ((distance myself) ^ 2)
-  ] of agent-set
+  let total 0
+  ask agent-set [
+    ask myself [
+      face myself
+      rt 180
+    ]
+    let x-component [dx] of myself
+    set total total + (x-component * k * (charge * [charge] of myself) / ((distance myself) ^ 2))
+  ]
+  report total
 end
 
 
@@ -155,36 +173,32 @@ to color-patches-by-e-density
     ]
     ; set pcolor scale-color blue (count e-pieces-here) 0 8
 
-    let local-charge mean [count e-pieces] of patches in-radius 1
-    set pcolor scale-color blue (sqrt local-charge) 0 10
+    let local-charge mean [count e-pieces-here] of patches in-radius 1
+    set pcolor scale-color blue (sqrt local-charge) 0 4
 
   ]
 end
 
-to add-charge-and-potential-to-patch  ; e-piece procedure
-
-  set e-potential e-potential + my-potential
-  set pcharge pcharge + [charge] of myself
-
+to add-charge-to-patch  ; e-piece procedure
+  ask patch-here [
+    set pcharge pcharge + [charge] of myself
+  ]
 end
 
-to subtract-charge-and-potential-to-patch
-    set e-potential e-potential - my-potential
+to subtract-charge-from-patch ; e-piece procedure
+  ask patch-here [
     set pcharge pcharge - [charge] of myself
+  ]
 end
 
 to move-to-lowest-potential
-  subtract-charge-and-potential-to-patch
+  subtract-charge-from-patch
 
-  move-to min-one-of patches [potential]
-  add-charge-and-potential-to-patch
+  move-to min-one-of patches with [not any? nuclei-here] [potential]
+  add-charge-to-patch
 
   setxy (xcor + random-float 1 - 0.5) (ycor + random-float 1 - 0.5)
 
-end
-
-to-report my-potential
-  report -0.04 * k * [charge] of myself
 end
 
 
@@ -205,13 +219,13 @@ to calculate-n-potential ;; monitor procedure
 end
 
 to-report potential ;; patch-procedure
-  report n-potential + e-potential
+  report n-potential + (-0.05 * k * pcharge)
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-258
+279
 10
-814
+835
 297
 -1
 -1
@@ -270,10 +284,10 @@ NIL
 0
 
 MONITOR
-252
-478
-396
-523
+254
+449
+398
+494
 total electron-energy
 sum [energy] of e-pieces
 2
@@ -310,10 +324,10 @@ electrons-feel-other-nuclei?
 -1000
 
 PLOT
-267
-304
-819
-454
+235
+301
+841
+451
 Potential 
 NIL
 NIL
@@ -389,17 +403,17 @@ initial-distance
 initial-distance
 2
 12
-6.0
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SWITCH
-405
-483
-633
-516
+407
+454
+635
+487
 show-piece-density-labels?
 show-piece-density-labels?
 1
@@ -415,7 +429,7 @@ number-of-nuclei
 number-of-nuclei
 1
 2
-1.0
+2.0
 1
 1
 NIL
@@ -442,6 +456,47 @@ NIL
 3
 1
 11
+
+MONITOR
+265
+501
+383
+546
+NIL
+[Ax] of nucleus 0
+3
+1
+11
+
+MONITOR
+393
+500
+512
+545
+NIL
+[Ax] of nucleus 1
+3
+1
+11
+
+PLOT
+658
+456
+858
+606
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot [xcor] of nucleus 0"
+"pen-1" 1.0 0 -7500403 true "" "plot [xcor] of nucleus 1"
 
 @#$#@#$#@
 ## WHAT IS IT?
