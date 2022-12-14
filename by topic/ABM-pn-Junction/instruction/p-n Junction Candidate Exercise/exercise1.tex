@@ -1,0 +1,157 @@
+\documentclass[12pt]{exam}
+\usepackage{jde_course_latex}
+\usepackage{mathrsfs} 
+\usepackage{arydshln}
+\usepackage[
+backend=biber,
+style=alphabetic,
+sorting=ynt]
+{biblatex}
+\addbibresource{references.bib}
+
+\firstpageheadrule
+\firstpagefootrule
+\runningheadrule
+\runningfootrule
+\lhead{Agent-Based Modeling --- The $p$-$n$ Junction}
+\rhead{Draft --- December 2019}
+\lfoot{\includegraphics[height=0.75cm]{./Figures/CT-STEM.pdf}}
+\cfoot{}
+\rfoot{\thepage}
+
+ %Flip flag between \noprint* and \print to toggle environment display.
+\printanswers
+\printlabguide
+\noprintID
+\noprintrubric
+\noprintoutcomes
+\noprintcomments
+
+%Solution typestting------------------------
+\unframedsolutions
+\pointsinrightmargin
+\CorrectChoiceEmphasis{\color{red}\bfseries}
+\SolutionEmphasis{\color{red}}
+
+%Begin document-----------------------------
+\begin{document}
+			
+{\Large \textcolor{NUpurp120}{MAT\_SCI 351-2: The $p$-$n$ Junction}}
+
+%Collaboration Guide----------------------------------
+\begin{LabGuide}
+
+The \textit{Overleaf} project for this assignment can be found  at:
+
+\begin{center}
+\href{https://www.overleaf.com/project/https://www.overleaf.com/read/qtyzpkccphrv}{https://www.overleaf.com/read/qtyzpkccphrv}.
+\end{center}
+
+Contact Jonathan Emery at
+
+\begin{center}
+\href{mailto:jonathan.emery@northwestern.edu}{jonathan.emery@northwestern.edu}
+\end{center}
+
+to acquire collaborative write permissions for this project.
+
+\end{LabGuide}
+
+%Exercise-------------------------------
+The $p$-$n$ junction is a central building block to critical electronic devices such as diodes, transistors, light-emitting diodes (LEDs) and photovoltaic (PV) cells. In this exercise, we will explore $p$-$n$ junction behavior using a molecular-dynamics classical charge carrier transport model in \textsc{NetLogo}. At the end of this assignment you will be able to 
+
+\begin{enumerate}
+    \item Describe and interpret the electronic phenomena that occur when when $p$-type semiconductor is in contact with an $n$-type semiconductor.
+    \item Derive the important $p$-$n$ junction properties ($p$, $n$, $\rho_{\mathrm{net}}$, $\mathcal{E}_x$, $V(x)$, and $W$) that emerge due to carrier diffusion at the interface.
+    \item Adapt various materials-related parameters (band gap, charge mobility, dopant concentration, etc.) to deduce the influence of materials properties on device behavior.
+\end{enumerate}
+
+\section*{Model Description} %-NA - J. Kelter Edit.
+
+We'll use a computational tool constructed in \textsc{NetLogo} by J. Kelter called \texttt{p-n-junction}. This simulation models a $p$-$n$ junction using molecular dynamics. The model consists of both intrinsic and extrinsic charge carriers that accelerate classically under an applied field. For a more complete description of the model, refer to the \texttt{Info} tab in the model. \textbf{The user can explore the effects of the following factors on fields and potentials, charge carrier distributions, and currents:}
+
+\begin{enumerate}
+    \item The influence of the initial number of $p$ or $n$ dopants.
+    \item Thermal activation of carriers is controlled using the band gap and temperature.
+    \item The likelihood of scattering (random changes in velocity at some time step).
+    \item The effect of an applied voltage on the behavior.
+\end{enumerate}
+
+\newpage
+
+
+%Begin Questions--------------------------------
+\begin{questions}
+\question \textcolor{NUpurp120}{\Large\sffamily{Properties of the $p$-$n$ Junction}} 
+
+We'll begin by familiarizing ourselves with the simulation tool. Here, we'll explore the changes in the model's outputs by varying input parameters. First, however, you need access the simulation tool
+    
+    \begin{enumerate}
+        \item Download an install the \textsc{NetLogo} 6.1.1.\href{https://ccl.northwestern.edu/netlogo/6.1.1/}{https://ccl.northwestern.edu/netlogo/6.1.1/}  desktop application. Get the correct version for your operating system.
+        \item Download and open the \textsc{NetLogo} model \texttt{p-n-junction.nlogo} from \textit{Canvas}.
+    \end{enumerate} 
+    
+Once you've loaded the model, record the default settings and press ``setup''.
+
+\begin{parts}
+    \part Observe the physical representation of the model.
+\end{parts}
+
+
+\end{questions}
+
+
+%FileID--------------------------------
+\begin{FileID}
+	\begin{center}
+		\begin{tabular}{ll}
+			\hline
+			\hline
+			\#FileTag:351.2-Devices-ABM-E1-1.tex & \#SourceTag:Su19-Original\\
+			\#AuthorTag:JDEmery          & \#AuthorTag:JKelter \\
+			\#UseTag:In-class            & \#UseTag:Homework \\
+			\#AlignmentTag:Kasap3-Ch6 (\cite{Kasap:2005:PEM:1594045})    & \#AlignmentTag: \\
+			\#TopicTag:Semiconductor     & \#TopicTag:pnJunction\\
+			\#TopicTag:Computational     & \#TopicTag:ShortAnswer \\
+			\#TaxonomyTag:Analyze        & \#TaxonomyTag:Create \\
+			\hline
+		\end{tabular}
+	\end{center}
+\end{FileID}
+
+%Rubric--------------------------------
+\begin{rubric}
+
+\begin{enumerate}
+	\item 
+\end{enumerate}
+
+\end{rubric}
+
+%Outcomes--------------------------------
+\begin{outcomes}
+	\begin{center}
+		\begin{tabular}{cccc}
+			\hline\hline
+			Class-Term & Instructor & Assessment & Results (Full/Partial/No Credit|Ave)\\
+			\hline
+			201-W20 & Emery-Lauhon & In-class & -\%/ -\%/ -\%|-\%\\
+			\hline
+		\end{tabular}
+	\end{center}
+\end{outcomes}
+
+%Comments--------------------------------
+\begin{comments}
+
+\begin{itemize}
+    \item How can we integrate (or touch on the physical implications of) the continuity equation or the Poisson equation? See \href{https://www.tf.uni-kiel.de/matwis/amat/semi_en/index.html}{here}?
+\end{itemize}
+
+\end{comments}
+
+\newpage
+\printbibliography
+
+
+\end{document}

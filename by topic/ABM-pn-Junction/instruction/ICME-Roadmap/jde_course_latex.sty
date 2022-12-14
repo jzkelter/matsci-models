@@ -1,0 +1,371 @@
+%%
+%jdestyle is based off of jmr_style
+
+%Font families and such
+\usepackage{ulem}
+\usepackage{lmodern}
+
+% define colors
+\usepackage[usenames,dvipsnames,table]{xcolor}
+	%NU Primary Palette
+	\definecolor{NUpurp}{HTML}{4E2A84}
+	\definecolor{NUpurp10}{HTML}{EEEBF7}
+	\definecolor{NUpurp30}{HTML}{ADA2CF}
+	\definecolor{NUpurp60}{HTML}{6450A1}
+	\definecolor{NUpurp120}{HTML}{401F68}
+	\definecolor{RichBlack10}{HTML}{F0F0F0}
+	\definecolor{RichBlack20}{HTML}{D1D3D4}
+	\definecolor{RichBlack50}{HTML}{492F92}
+	\definecolor{RichBlack80}{HTML}{6D6E71}
+	%NU Secondary Palette: Brights
+	\definecolor{BGreen}{HTML}{64A70B}
+	\definecolor{BAqua}{HTML}{6DCDB8}
+	\definecolor{BBlue}{HTML}{418FDE}
+	\definecolor{BYellow}{HTML}{E1E000}
+	\definecolor{BOrange}{HTML}{FFB500}
+	\definecolor{BRed}{HTML}{E1523D}
+	%NU Secondary Palette: Darks
+	\definecolor{DGreen}{HTML}{007A53}
+	\definecolor{DAqua}{HTML}{007396}
+	\definecolor{DBlue}{HTML}{00205B}
+	\definecolor{DYellow}{HTML}{C5A900}
+	\definecolor{DOrange}{HTML}{C67D30}
+	\definecolor{DRed}{HTML}{B94700}
+	%Rondinelli color pallette
+	\definecolor{myred}{RGB}{204,25,25}
+	\definecolor{myblue}{RGB}{0,102,221}
+	\definecolor{mygrey}{rgb}{0.09411,0.28235,0.70196}
+  \definecolor{mygreen}{RGB}{0,204,155}
+%
+\usepackage{ragged2e}
+\usepackage{parskip}
+\usepackage[pdftex,
+  breaklinks,             %
+  bookmarks = false, %
+  %pdfborder     = {},  %
+  pdfpagemode   = UseNone,%
+  pdfstartview 	= FitH,		%
+  pdfstartpage  = 1,      %
+  colorlinks    = true,   %
+]{hyperref}
+\hypersetup{
+    colorlinks,
+    linkcolor=[rgb]{0,0.2,1},
+    citecolor=[rgb]{0,0.2,1},
+    urlcolor=[rgb]{0,0.2,1}}
+
+% setup margins
+\usepackage{geometry}
+	\geometry{letterpaper,tmargin=1.0in,bmargin=1.0in,lmargin=1.0in,rmargin=1.0in}
+%
+
+%redefine item symbol
+\renewcommand{\labelitemi}{$\diamond$}
+
+%maths, lists and units
+\usepackage{enumerate}
+\usepackage{vwcol}  
+\usepackage{amsmath,mathtools}
+\usepackage{arydshln}
+\usepackage{mathrsfs}
+\usepackage{cancel}
+\usepackage{upgreek}
+\usepackage{etoolbox}
+\usepackage{pbox}
+\usepackage{needspace}
+\usepackage[]{units}
+\usepackage{adforn}           %helps with some symbollic rendering
+	\newcommand*\rfrac[2]{{}^{#1}\!/_{#2}}
+	\newcommand*\diff{\mathop{}\!\mathrm{d}}
+	\newcommand*\Diff[1]{\mathop{}\!\mathrm{d^#1}}
+	\DeclareMathOperator\erf{erf}
+	\mathchardef\mhyphen="2D
+
+% figures
+\pdfsuppresswarningpagegroup=1
+\usepackage{adjustbox}        %helps with graphics positioning
+\usepackage{pdfpages}         %allows insertion of pdf pages
+\usepackage{float}            %helps with graphics positioning
+\usepackage{wrapfig}
+\usepackage{multirow}         %helps with table organization
+\usepackage{multicol}         %helps with table organization
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{booktabs}         % nicer tables
+\usepackage{titlesec}
+\usepackage[protrusion=true,expansion=true,tracking=smallcaps]{microtype}
+\usepackage{hyperref}
+\usepackage{marginnote}
+	\reversemarginpar
+\usepackage{setspace} 	% set singlespacing bib
+\usepackage{mdwlist}	% enable enumerate* environment -single space lists
+\usepackage{sidecap}	% enable side captions
+\usepackage{verbatimbox} %code output
+\usepackage{rotating} % rotate table 
+\usepackage{sectsty}
+  \allsectionsfont{\mdseries\sffamily\large}
+  \subsectionfont{\mdseries\itshape\normalsize}
+	\subsubsectionfont{\mdseries\sffamily\normalsize}
+
+  \long\def\symbolfootnote[#1]#2{\begingroup%
+  \def\thefootnote{\fnsymbol{footnote}}\footnote[#1]{#2}\endgroup}
+
+% captions
+%\usepackage{ccaption}
+\usepackage[labelfont=sc]{caption}
+\usepackage{ragged2e}
+%% Change format of captions
+  %\captionnamefont{\bfseries \footnotesize \sffamily}
+  %\captiontitlefont{\footnotesize \sffamily}
+  %\captiondelim{: }
+  %\captionstyle{\justifying}
+  %\onlinecite command   
+\makeatletter
+\DeclareRobustCommand\onlinecite{\@onlinecite}
+\def\@onlinecite#1{\begingroup\let\@cite\NAT@citenum\citealp{#1}\endgroup}
+\makeatother
+%
+
+% redefine references
+\renewcommand{\refname}{}
+
+% footnotes are now symbols rather than numerals
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+
+
+% clean up reference style
+\usepackage[numbers,sort&compress,super]{natbib} %'sort&compress' might be useful?
+%
+\setlength\parindent{0pt}%
+\setlength{\bibsep}{0pt}%6pt} % Change bib spacing, requires natbib package
+\setlength{\columnsep}{10pt} % change wrapfig horizontal padding
+
+
+\clubpenalty = 10000
+\widowpenalty = 10000
+
+
+%%TABLE COLORS
+
+\colorlet{tableheadcolor}{mygreen} % Table header colour = 25% gray
+\newcommand{\headcol}{\rowcolor{tableheadcolor}} %
+\colorlet{tablerowcolor}{mygreen} % Table row separator colour = 10% gray
+\newcommand{\rowcol}{\rowcolor{tablerowcolor}} %
+    % Command \topline consists of a (slightly modified) \toprule followed by a \heavyrule rule of colour tableheadcolor (hence, 2 separate rules)
+\newcommand{\topline}{\arrayrulecolor{black}\specialrule{0.1em}{\abovetopsep}{0pt}%
+            \arrayrulecolor{tableheadcolor}\specialrule{\belowrulesep}{0pt}{0pt}%
+            \arrayrulecolor{black}}
+    % Command \midline consists of 3 rules (top colour tableheadcolor, middle colour black, bottom colour white)
+\newcommand{\midline}{\arrayrulecolor{tableheadcolor}\specialrule{\aboverulesep}{0pt}{0pt}%
+            \arrayrulecolor{black}\specialrule{\lightrulewidth}{0pt}{0pt}%
+            \arrayrulecolor{white}\specialrule{\belowrulesep}{0pt}{0pt}%
+            \arrayrulecolor{black}}
+    % Command \bottomline consists of 2 rules (top colour
+\newcommand{\bottomline}{\arrayrulecolor{white}\specialrule{\aboverulesep}{0pt}{0pt}%
+            \arrayrulecolor{black}\specialrule{\heavyrulewidth}{0pt}{\belowbottomsep}}%
+\newcommand{\bottomlinec}{\arrayrulecolor{tablerowcolor}\specialrule{\aboverulesep}{0pt}{0pt}%
+            \arrayrulecolor{black}\specialrule{\heavyrulewidth}{0pt}{\belowbottomsep}}%
+
+%Table Colors
+\usepackage{tabu}
+
+
+%Exam class stuff:
+\newcommand{\tf}[1][{}]{				% spacing for for t/f questions
+	\fillin[#1][0.5in]}%          % this could be changed to create boxes.
+
+%Level 1 Point Allocation
+\newcommand{\PointAllocationLevelOne}[1][{}]{
+	\ifpset
+		\question[]
+	\fi
+	\ifquiz
+		\question[#1]
+	\fi
+	\ifexam
+		\part[#1]
+	\fi
+	\iflab
+		\question[]
+	\fi
+	\ifqbank
+		\question[#1]
+	\fi
+}
+
+%Level 2 Point Allocation
+\newcommand{\PointAllocationLevelTwo}[1]{
+	\ifpset
+		\part[]
+	\fi
+	\ifquiz
+		\part[#1]
+	\fi
+	\ifexam
+		\subpart[#1]
+	\fi
+	\iflab
+		\part[]
+	\fi
+	\ifqbank
+		\part[#1]
+	\fi
+}
+
+%Level 3 Point Allocation
+\newcommand{\PointAllocationLevelThree}[1]{
+	\ifpset
+		\subpart[]
+	\fi
+	\ifquiz
+		\subpart[#1]
+	\fi
+	\ifexam
+		\subsubpart[#1]
+	\fi
+	\iflab
+		\subpart[]
+	\fi
+	\ifqbank
+		\subpart[#1]
+	\fi
+}
+
+%Add outcomes environment in exam class:
+%--------------------------------------------------------------------
+\newcommand{\printoutcomes}{\printoutcomestrue}
+\newcommand{\noprintoutcomes}{\printoutcomesfalse}
+
+\newif\ifprintoutcomes
+\printoutcomesfalse
+
+\newenvironment{outcomes}
+{%
+  \ifprintoutcomes
+    \printanswerstrue % will be cancelled by the end of the environment
+    \renewcommand{\solutiontitle}{\noindent\textbf{Outcomes:}\enspace}%
+    \begin{solution}%
+  \else
+    \setbox 0\vbox\bgroup
+  \fi
+}
+{%
+  \ifprintoutcomes
+    \end{solution}
+  \else
+    \egroup
+  \fi
+}
+%--------------------------------------------------------------------
+
+%Add rubric environment in exam class:
+%--------------------------------------------------------------------
+\newcommand{\printrubric}{\printrubrictrue}
+\newcommand{\noprintrubric}{\printrubricfalse}
+
+\newif\ifprintrubric
+\printrubricfalse
+
+\newenvironment{rubric}
+{%
+  \ifprintrubric
+    \printanswerstrue % will be cancelled by the end of the environment
+    \renewcommand{\solutiontitle}{\noindent\textbf{\color{NUpurp}{Grading Rubric:}}\enspace}%
+    \begin{solution}%
+			\color{NUpurp}
+  \else
+    \setbox 0\vbox\bgroup
+  \fi
+}
+{%
+  \ifprintrubric
+    \end{solution}
+  \else
+    \egroup
+  \fi
+}
+%--------------------------------------------------------------------
+
+
+%Add comments/extensions environment in exam class:
+%--------------------------------------------------------------------
+\newcommand{\printcomments}{\printcommentstrue}
+\newcommand{\noprintcomments}{\printcommentsfalse}
+
+\newif\ifprintcomments
+\printcommentsfalse
+
+\newenvironment{comments}
+{%
+  \ifprintcomments
+    \printanswerstrue % will be cancelled by the end of the environment
+    \renewcommand{\solutiontitle}{\noindent\textbf{\color{orange}{Comments/Extensions:}}\enspace}%
+    \begin{solution}%
+			\color{orange}
+  \else
+    \setbox 0\vbox\bgroup
+  \fi
+}
+{%
+  \ifprintcomments
+    \end{solution}
+  \else
+    \egroup
+  \fi
+}
+%--------------------------------------------------------------------
+
+
+%Add print file ID environment in exam class:
+%--------------------------------------------------------------------
+\newcommand{\printID}{\printIDtrue}
+\newcommand{\noprintID}{\printIDfalse}
+
+\newif\ifprintID
+\printIDfalse
+
+\newenvironment{FileID}
+{%
+  \ifprintID
+    \printanswerstrue % will be cancelled by the end of the environment
+    \renewcommand{\solutiontitle}{\noindent\textbf{File Information:}\enspace}%
+    \begin{solution}%
+  \else
+    \setbox 0\vbox\bgroup
+  \fi
+}
+{%
+  \ifprintID
+    \end{solution}
+  \else
+    \egroup
+  \fi
+}
+
+
+%Add Laboratory TA guide environment in exam class:
+%--------------------------------------------------------------------
+\newcommand{\printlabguide}{\printlabguidetrue}
+\newcommand{\noprintlabguide}{\printlabguidefalse}
+
+\newif\ifprintlabguide
+\printlabguidefalse
+
+\newenvironment{LabGuide}
+{%
+  \ifprintlabguide
+    \printanswerstrue % will be cancelled by the end of the environment
+    \renewcommand{\solutiontitle}{\noindent\textbf{\color{blue}{Laboratory Guide:}}\enspace}%
+    \begin{solution}%
+			\color{blue}
+  \else
+    \setbox 0\vbox\bgroup
+  \fi
+}
+{%
+  \ifprintlabguide
+    \end{solution}
+  \else
+    \egroup
+  \fi
+}
