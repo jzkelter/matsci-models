@@ -1,10 +1,11 @@
-breed [particles particle]
+breed [atoms atom]
 
-particles-own [
-  fx     ; x-component of force vector
-  fy     ; y-component of force vector
-  vx     ; x-component of velocity vector
-  vy     ; y-component of velocity vector
+atoms-own [
+  fx      ; x-component of force vector
+  fy      ; y-component of force vector
+  vx      ; x-component of velocity vector
+  vy      ; y-component of velocity vector
+  pinned? ; whether the atom is pinned so it can't move
 ]
 
 globals [
@@ -14,6 +15,9 @@ globals [
   cutoff-dist
   dt
   kb
+  free-atoms
+  distances-list
+  distances-rolling-mean
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;
@@ -25,55 +29,59 @@ to setup
   set-default-shape turtles "circle"
   set dt .1
   set kb (1 / 1000)  ; just picking a random constant for Kb that makes things work reasonably
-  set diameter .9
-  set r-min 1
-  set eps .02
-  set cutoff-dist 5 * r-min
+  set diameter 1
+  set r-min 1.12
+  set eps 1
+  set cutoff-dist 2 * r-min
+  set distances-list (list r-min)
+  set distances-rolling-mean r-min
   setup-atoms
   init-velocity
-  ask particle 1 [set vx atom1-initial-vx]
   reset-timer
   reset-ticks
 end
 
 
 to setup-atoms
-  create-particles num-atoms [
+  let num-atoms 23
+  create-atoms num-atoms [
     set shape "circle"
     set size diameter
     set color blue
+    set pinned? false
   ]
 
-  if initial-config = "HCP" [
-    let l sqrt(num-atoms) ;the # of atoms in a row
-    let x-dist r-min
-    let y-dist sqrt (x-dist ^ 2 - (x-dist / 2) ^ 2)
-    let ypos (- l * x-dist / 2) ;the y position of the first atom
-    let xpos (- l * x-dist / 2) ;the x position of the first atom
-    let r-num 0  ;the row number
-    ask turtles [  ;set the atoms; positions
-      if xpos > (l * x-dist / 2)  [  ;condition to start a new row
-        set r-num r-num + 1
-        set xpos (- l * x-dist / 2) + (r-num mod 2) * x-dist / 2
-        set ypos ypos + y-dist
-      ]
-      setxy xpos ypos  ;if we are still in the same row
-      set xpos xpos + x-dist
+
+  let l sqrt(num-atoms) ;the # of atoms in a row
+  let x-dist r-min
+  let y-dist sqrt (x-dist ^ 2 - (x-dist / 2) ^ 2)
+  let ypos min-pycor
+  let min-x (- l * x-dist / 2) + 0.5
+  let xpos min-x ;the x position of the first atom
+  let r-num 0  ;the row number
+  ask turtles [  ;set the atoms; positions
+    if xpos > ((l - 1) * x-dist / 2 + 0.5)  [  ;condition to start a new row
+      set r-num r-num + 1
+      set xpos min-x + (r-num mod 2) * x-dist / 2
+      set ypos ypos + y-dist
     ]
+    setxy xpos ypos  ;if we are still in the same row
+    set xpos xpos + x-dist
+  ]
+  ask atoms with-min [ycor] [
+    set pinned? true
+    set color color + 1
   ]
 
-  if initial-config = "Random" [
-    ask particles [
-      setxy random-xcor random-ycor
-    ]
-    remove-overlap ;make sure atoms aren't overlapping
-  ]
 
+
+  set free-atoms atoms with [not pinned?]
 end
+
 
 to init-velocity
   let v-avg sqrt( 3 * Kb * temp)
-  ask particles [
+  ask atoms [
     let a random-float 1  ; a random amount of the total velocity to go the x direction
     set vx sqrt (a * v-avg ^ 2) * positive-or-negative
     set vy sqrt( v-avg ^ 2 - vx ^ 2)  * positive-or-negative
@@ -86,17 +94,6 @@ to-report positive-or-negative
 end
 
 
-to remove-overlap
-  ask particles [
-    while [overlapping] [
-      setxy random-xcor random-ycor
-    ]
-  ]
-end
-
-to-report overlapping
-  report any? other turtles in-radius r-min
-end
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -104,20 +101,23 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;
 
 to go
-  ask particles [
+  if ticks > 100 and (precision ticks 2 mod 20) = 0 and temp <= 6.9 [set temp temp + 0.1]
+  set distances-rolling-mean 0.99 * distances-rolling-mean + 0.01 * mean distances-list
+  set distances-list (list) ; reset the list
+  ask free-atoms [
     update-force-and-velocity
   ]
-  ask particles [
+  ask free-atoms [
     move
   ]
-  if constant-temp? [scale-velocities]
+  scale-velocities
   tick-advance dt
   update-plots
 end
 
 
 to-report current-temp
-  report (1 / (3 * Kb)) * mean [vx ^ 2 + vy ^ 2] of particles
+  report (1 / (3 * Kb)) * mean [vx ^ 2 + vy ^ 2] of free-atoms
 end
 
 
@@ -125,11 +125,11 @@ to scale-velocities
   let ctemp current-temp
   (ifelse
     ctemp = 0 and temp != 0 [
-      ask particles [init-velocity]
+      ask atoms [init-velocity]
     ]
     ctemp != 0 [
-      let scale-factor sqrt( temp / ctemp )  ; if "external" temperature is higher particles will speed up and vice versa
-      ask particles [
+      let scale-factor sqrt( temp / ctemp )  ; if "external" temperature is higher atoms will speed up and vice versa
+      ask atoms [
         set vx vx * scale-factor
         set vy vy * scale-factor
       ]
@@ -137,16 +137,22 @@ to scale-velocities
   )
 end
 
-to update-force-and-velocity  ; particle procedure
+to update-force-and-velocity  ; atom procedure
   let new-fx 0
   let new-fy 0
-  ask other particles in-radius cutoff-dist [
+  ask other atoms in-radius cutoff-dist [
     let r distance myself
     let force calc-force r
     face myself
     rt 180
     set new-fx new-fx + (force * dx)
-    set new-fy new-fy + (force * dy)]
+    set new-fy new-fy + (force * dy)
+
+    if r < (r-min * 1.3) [
+      set distances-list lput r distances-list
+    ]
+
+  ]
 
   set vx velocity-verlet-velocity vx fx new-fx
   set vy velocity-verlet-velocity vy fy new-fy
@@ -156,13 +162,17 @@ to update-force-and-velocity  ; particle procedure
 end
 
 to-report calc-force [r]
-  report (- eps / (r ^ 7)) * ((r ^ -6) - 1)
+  ;; This is the LJ force with terms factored out and assuming sigma=1 and ignoring the factor of 4 usually at the beginning of the LJ potential
+  ;; 0.01846629628836721 is the adjustement for the cutoff distance
+  report (- 6 * eps / (r ^ 7)) * (2 * (r ^ -6) - 1) - 0.01846629628836721
 end
 
-to move  ; particle procedure
+to move  ; atom procedure
   ;; Uses velocity-verlet algorithm
-  set xcor velocity-verlet-pos xcor vx fx
-  set ycor velocity-verlet-pos ycor vy fy
+  if not pinned? [
+    set xcor velocity-verlet-pos xcor vx fx
+    set ycor velocity-verlet-pos ycor vy fy
+  ]
 end
 
 to-report velocity-verlet-pos [pos v a]  ; position, velocity and acceleration
@@ -174,13 +184,13 @@ to-report velocity-verlet-velocity [v a new-a]  ; position and velocity
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-185
-0
-520
-336
+186
+10
+465
+290
 -1
 -1
-29.69
+38.7143
 1
 18
 1
@@ -190,21 +200,21 @@ GRAPHICS-WINDOW
 1
 1
 1
--5
-5
--5
-5
+-3
+3
+-3
+3
 1
 1
 1
 ticks
-30
+30.0
 
 BUTTON
 0
-90
+50
 86
-123
+83
 NIL
 setup
 NIL
@@ -219,9 +229,9 @@ NIL
 
 BUTTON
 90
-90
+50
 176
-123
+83
 NIL
 go
 T
@@ -236,90 +246,67 @@ NIL
 
 SLIDER
 0
-50
+87
 172
-83
-num-atoms
-num-atoms
-0
-30
-28
-1
-1
-NIL
-HORIZONTAL
-
-CHOOSER
-0
-0
-138
-45
-initial-config
-initial-config
-"HCP" "Random"
-1
-
-SLIDER
-0
-130
-172
-163
+120
 temp
 temp
-0.00
-5
-5
+1
+7
+1.0
 .1
 1
 NIL
 HORIZONTAL
 
-SWITCH
-0
-170
-155
-203
-constant-temp?
-constant-temp?
-0
-1
--1000
+PLOT
+466
+10
+666
+195
+mean neighbor distance vs time
+NIL
+NIL
+0.0
+10.0
+1.1
+1.15
+true
+false
+"" ""
+PENS
+"instantaneous" 1.0 0 -7500403 true "" "plot mean distances-list"
+"rolling avg" 1.0 0 -16777216 true "" "plot distances-rolling-mean"
+
+PLOT
+468
+197
+668
+347
+mean neighbor dist. vs temp
+NIL
+NIL
+1.0
+7.0
+1.12
+1.13
+true
+false
+"" ""
+PENS
+"default" 1.0 2 -16777216 true "" "if ticks > 100 [plotxy temp distances-rolling-mean]"
 
 MONITOR
-0
-210
-86
-255
-temp
-current-temp
+343
+10
+464
+55
+mean neighbor dist
+distances-rolling-mean
 3
 1
 11
 
-SLIDER
-0
-310
-170
-343
-atom1-initial-vx
-atom1-initial-vx
-0
-.2
-0
-.01
-1
-NIL
-HORIZONTAL
-
-TEXTBOX
-0
-265
-150
-314
-Turn off constant-temp? when using this slider and set temp to 0
-12
-0
-1
 @#$#@#$#@
 ## WHAT IS IT?
 
@@ -381,7 +368,6 @@ Copyright 2021 Jacob Kelter and Uri Wilensky.
 This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License.  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/3.0/ or send a letter to Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
 
 Commercial licenses are also available. To inquire about commercial licenses, please contact Uri Wilensky at uri@northwestern.edu.
-
 @#$#@#$#@
 default
 true
@@ -665,22 +651,22 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.2.2
+NetLogo 6.3.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
 default
-0
--0.2 0 0 1
-0 1 1 0
-0.2 0 0 1
+0.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
 link direction
 true
 0
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 @#$#@#$#@
-
+0
 @#$#@#$#@

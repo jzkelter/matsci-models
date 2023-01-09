@@ -1,229 +1,226 @@
-breed [tick-marks tick-mark]
-breed [points point]
-breed [atoms atom]
-atoms-own [
-  vx
+extensions [profiler]
+breed [particles particle]
+
+particles-own [
+  ax     ; x-component of acceleration vector
+  ay     ; y-component of acceeleration vector
+  vx     ; x-component of velocity vector
+  vy     ; y-component of velocity vector
 ]
+
 globals [
-  atom1
-  atom2
+  diameter
+  r-min
+  eps
+  -eps*4
+  cutoff-dist
   dt
-  curve-log
-  latest-point-change
+  kb
 ]
 
-;***************************
-;***********SETUP***********
-;***************************
 
-to full-setup
-  ca
-  set dt .001
-  set curve-log (list (list date-and-time 0 0))
+
+to profile
+  profiler:reset
+  profiler:start
+  repeat 10000 [go]
+  profiler:stop
+  print profiler:report
+end
+
+;;;;;;;;;;;;;;;;;;;;;;
+;; Setup Procedures ;;
+;;;;;;;;;;;;;;;;;;;;;;
+
+to setup
+  clear-all
   set-default-shape turtles "circle"
-  draw-axes
-  create-function-points
-  create-atoms 1 [
-    set atom1 self
-    set xcor 0
-    set color turquoise
-    set size 1.5]
-  create-atoms 1 [
-    set atom2 self
-    set xcor max-pxcor - 1
-    set size 1.5
-    set heading 90
-    set color red]
-
+  set dt .1
+  set kb (1 / 1000)  ; just picking a random constant for Kb that makes things work reasonably
+  set diameter .9
+  set r-min 1
+  set eps 1
+  set -eps*4 -4 * eps
+  set cutoff-dist 5 * r-min
+  setup-atoms
+  init-velocity
+  ask particle 1 [set vx atom1-initial-vx]
+  reset-timer
   reset-ticks
 end
 
-to setup
-  ifelse curve-log = 0 [
-    full-setup
-  ] [
-    reset-ticks
-    clear-all-plots
-  ]
-  ask points [
-    set ycor 0
-    log-position
-  ]
-end
 
-
-to draw-axes
-  crt 1 [
-    set color white
+to setup-atoms
+  create-particles num-atoms [
     set shape "circle"
-    pen-down
-    setxy 0 min-pycor
-    set heading 0
-    fd world-height
-    set ycor 0
-    set heading 90
-    fd world-width
-    bk world-width
+    set size diameter
+    set color blue
+  ]
 
-    die]
-end
-
-to create-function-points
-  ask patches with [pycor = 0 and pxcor >= 0] [
-    sprout-points 1 [
-      set size .5
-      set color blue + 1]]
-
-  ask points [
-    create-links-with other points with [abs (xcor - [xcor] of myself) = 1] [
-      set color blue
-      set thickness .3
+  if initial-config = "Solid" [
+    let l sqrt(num-atoms) ;the # of atoms in a row
+    let x-dist r-min
+    let y-dist sqrt (x-dist ^ 2 - (x-dist / 2) ^ 2)
+    let ypos (- l * x-dist / 2) ;the y position of the first atom
+    let xpos (- l * x-dist / 2) ;the x position of the first atom
+    let r-num 0  ;the row number
+    ask turtles [  ;set the atoms; positions
+      if xpos > (l * x-dist / 2)  [  ;condition to start a new row
+        set r-num r-num + 1
+        set xpos (- l * x-dist / 2) + (r-num mod 2) * x-dist / 2
+        set ypos ypos + y-dist
+      ]
+      setxy xpos ypos  ;if we are still in the same row
+      set xpos xpos + x-dist
     ]
+  ]
 
+  if initial-config = "Random" [
+    ask particles [
+      setxy random-xcor random-ycor
+    ]
+    remove-overlap ;make sure atoms aren't overlapping
+  ]
+
+end
+
+to init-velocity
+  let v-avg sqrt( 3 * Kb * temp)
+  ask particles [
+    let a random-float 1  ; a random amount of the total velocity to go the x direction
+    set vx sqrt (a * v-avg ^ 2) * positive-or-negative
+    set vy sqrt( v-avg ^ 2 - vx ^ 2)  * positive-or-negative
   ]
 end
 
-;************************
-;******Go*************
-;************************
-to go
-  if [xcor < 0] of atom2 [
-    ask atom2 [die]
-    stop
+
+to-report positive-or-negative
+  report ifelse-value random 2 = 0 [-1] [1]
+end
+
+
+to remove-overlap
+  ask particles [
+    while [overlapping] [
+      setxy random-xcor random-ycor
+    ]
   ]
+end
+
+to-report overlapping
+  report any? other turtles in-radius r-min
+end
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Runtime Procedures ;;
+;;;;;;;;;;;;;;;;;;;;;;;;
+
+to go
+  ask particles [
+    update-force-and-velocity
+  ]
+  ask particles [
+    move
+  ]
+  if constant-temp? [scale-velocities]
+  tick-advance dt
+  update-plots
+end
+
+
+to-report current-temp
+  report (1 / (2 * Kb)) * mean [vx ^ 2 + vy ^ 2] of particles
+end
+
+
+to scale-velocities
+  let ctemp current-temp
   (ifelse
-    go-mode = "draw potential" [draw-potential]
-    go-mode = "simulate/drag atom" [
-      drag-atom
-      move-atom
-      tick
+    ctemp = 0 and temp != 0 [
+      ask particles [init-velocity]
+    ]
+    ctemp != 0 [
+      let scale-factor sqrt( temp / ctemp )  ; if "external" temperature is higher particles will speed up and vice versa
+      ask particles [
+        set vx vx * scale-factor
+        set vy vy * scale-factor
+      ]
     ]
   )
-
 end
 
-to draw-potential
-  draw-function
-  display
-end
-
-
-to draw-function
-  if mouse-down? [
-    ask min-one-of points [abs(xcor - mouse-xcor)] [
-      set ycor mouse-ycor
-      log-position
-    ]
+to update-force-and-velocity  ; particle procedure
+  let new-ax 0
+  let new-ay 0
+  ask other particles in-radius cutoff-dist [
+    let r distance myself
+    let force calc-force r
+    face myself
+    rt 180
+    set new-ax new-ax + (force * dx)  ; assuming mass = 1. If not, neeed to divide force by mass to get acceleration
+    set new-ay new-ay + (force * dy)
   ]
+
+  set vx velocity-verlet-velocity vx ax new-ax
+  set vy velocity-verlet-velocity vy ay new-ay
+  set ax new-ax
+  set ay new-ay
+
 end
 
-to log-position
-  if new-point? or moved-significantly? [
-     set curve-log lput (list date-and-time xcor ycor) curve-log
-     log-point
-  ]
+to-report calc-force [r]
+  let r^3 r * r * r
+  let r^6 r^3 * r^3
+  report (-eps*4 / (r^6 * r)) * ((1 / r^6) - 1)
 end
 
-to log-point
-  set latest-point-change (list date-and-time xcor ycor)
+to move  ; particle procedure
+  ;; Uses velocity-verlet algorithm
+  set xcor velocity-verlet-pos xcor vx ax
+  set ycor velocity-verlet-pos ycor vy ay
 end
 
-to-report new-point?
-  report xcor != (item 1 last curve-log)
+to-report velocity-verlet-pos [pos v a]  ; position, velocity and acceleration
+  report pos + v * dt + (1 / 2) * a * (dt ^ 2)
 end
 
-to-report moved-significantly?
-  report abs (ycor - (last last curve-log)) >= .1
-end
-
-
-to move-atom
-  ask atom2 [
-    set vx vx + (force-at-x xcor) * dt
-    fd vx
-  ]
-end
-
-to drag-atom
-  if mouse-down? and (abs mouse-ycor) <= 1[ ;and [distancexy mouse-xcor mouse-ycor] of atom2 < 1 [
-    ask atom2 [
-      set xcor mouse-xcor
-      set vx 0
-    ]
-  ]
-end
-
-to-report sign [n]
-  report ifelse-value n = 0 [0] [n / abs n]
-end
-
-;******************************************
-;*******Potential/Force Functions**********
-;******************************************
-to-report potential-at-x [x]
-  ifelse x = round x [
-    report [ycor] of one-of points with [xcor = x]]
-  [
-    let left-point point-to-left x
-    let right-point point-to-right x
-    report [ycor] of left-point  + (slope right-point left-point) * (x - [xcor] of left-point)]
-end
-
-to-report slope [right-point left-point]
-  (ifelse
-    ;right-point = nobody and left-point = nobody [ask atom2 [die]]
-    right-point = nobody [report slope left-point (one-of points with [xcor = ([xcor] of left-point - 1)])]
-    left-point = nobody [report slope right-point (one-of points with [xcor = ([xcor] of right-point + 1)])]
-    ;; else:
-    [report ([ycor] of right-point - [ycor] of left-point) / ([xcor] of right-point - [xcor] of left-point)])
-end
-
-to-report point-to-left [x]
-  report one-of points with [xcor < x and abs(xcor - x) < 1]
-end
-
-to-report point-to-right [x]
-  report one-of points with [xcor > x and abs(xcor - x) < 1]
-end
-
-to-report force-at-x [x]
-  ifelse x = round x  ;; if the atom is exactly on one of the points of the function spline
-  [report mean (list force-at-x (x - 0.5) force-at-x (x + 0.5))]
-  [report (- slope (point-to-right x) (point-to-left x))]
+to-report velocity-verlet-velocity [v a new-a]  ; velocity, previous acceleration, new acceleration
+  report v + (1 / 2) * (new-a + a) * dt
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-215
-10
-688
-443
+185
+0
+519
+335
 -1
 -1
-20.23
+29.69
 1
-10
+18
 1
 1
 1
 0
-0
-0
 1
--1
-21
--10
-10
-0
-0
+1
+1
+-5
+5
+-5
+5
+1
+1
 1
 ticks
 30.0
 
 BUTTON
-115
-10
-215
-55
+0
+90
+86
+123
 NIL
 setup
 NIL
@@ -237,10 +234,10 @@ NIL
 1
 
 BUTTON
-145
-60
-210
-105
+90
+90
+176
+123
 NIL
 go
 T
@@ -253,121 +250,154 @@ NIL
 NIL
 0
 
-PLOT
+SLIDER
 0
-115
-210
-265
-x position vs time
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot [xcor] of atom2"
-
-BUTTON
-55
-270
-161
-303
-reset-graph
-reset-ticks\nclear-all-plots\n
-NIL
+50
+172
+83
+num-atoms
+num-atoms
+0
+30
+28.0
 1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
 1
-
-BUTTON
-15
-307
-195
-367
-export-sketch
-export-view \"interatomic-potential\"\t
 NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
+HORIZONTAL
 
 CHOOSER
 0
-60
-140
-105
-go-mode
-go-mode
-"draw potential" "simulate/drag atom"
-1
-
-BUTTON
 0
-10
-92
-43
-NIL
-full-setup
-NIL
+138
+45
+initial-config
+initial-config
+"Solid" "Random"
+0
+
+SLIDER
+0
+130
+172
+163
+temp
+temp
+0.00
+5
+5.0
+.1
 1
-T
-OBSERVER
 NIL
+HORIZONTAL
+
+SWITCH
+0
+170
+155
+203
+constant-temp?
+constant-temp?
+0
+1
+-1000
+
+MONITOR
+0
+210
+86
+255
+temp
+current-temp
+3
+1
+11
+
+SLIDER
+0
+310
+170
+343
+atom1-initial-vx
+atom1-initial-vx
+0
+.2
+0.0
+.01
+1
 NIL
-NIL
-NIL
+HORIZONTAL
+
+TEXTBOX
+0
+265
+150
+314
+Turn off constant-temp? when using this slider and set temp to 0
+12
+0.0
 1
 
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This is a molecular dynamics (MD) model using the Lennard-Jones potential function. This function models the fact that atoms attract each other when they are a small distance apart and repel each other when they are very close together. By modeling many atoms behaving according to the Lennard-Jones potential, we can see how the bulk behavior of matter at different temperatures emerges from the interactions between discrete atoms. The details of the Lennard-Jones function are discussed in the next section.
+
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+MD simulations operate according to Newton's laws. The basic steps of the model are as follows. Each tick, each atom:
+
+- Calculates the force that it feels from all other atoms using the Lennard-Jones potential
+- Calculates its acceleration based on the net force and its mass using a = F / m
+- Updates its velocity based on its acceleration
+- Updates its position based on its velocity.
+
+### The Lennard-Jones potential
+The Lennard-Jones potential tells you the potential energy of an atom, given its distance from another atom. The derivative of the Lennard-Jones potential tells yout he force an atom feels from another atom based on their distance.
+
+The potential is: V=4ϵ[(σ/r)^12−(σ/r)^6]. Where V is the intermolecular potential between two atoms or molecules, ϵ is depth of the potential well, σ is the distance at which the potential is zero (visualized as the diameter of the atoms), and r is the center-to-center distance of separation between both particles. This is an approximation; the potential function of a real atom depends on its electronic structure and will differ somewhat from the Lennard-Jones potential.
+Atoms that are very close will be strongly pushed away from one another, and atoms that are far apart will be gently attracted. Make sure to check out the THINGS TO TRY section to explore the Lennard-Jones potential more in depth.
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+### Simulation initialization
+**initial-config**: select if you want the atoms to start out randomly positioned or in a hexagonally-close-packed structure.
+
+**num-atoms**: select the number of atoms to start the simulation
+
+**temp**: select the initial temperature (this will determine the average initial velocity of the atoms.
+
+### Run the simulation
+
+**constant-temp?**: turn this on if you want temperature to be held constant. This can be turned on and off during the simulation run. When it is on, you can move the **temp** slider to change the temperature.
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+At low temperatures, the atoms will solidfy and at high temperatures they will break apart (evaporate). Also notice the the packing structure of atoms when they are in a solid and the structures that form when you cool the atoms down after evaporating compared to when they start in HCP.
 
-## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+## HOW TO CITE
 
-## EXTENDING THE MODEL
+If you mention this model or the NetLogo software in a publication, we ask that you include the citations below.
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+For the model itself:
 
-## NETLOGO FEATURES
+* Kelter, J. and Wilensky, U. (2005).  NetLogo Lennard-Jones Molecular Dynamics model.  http://ccl.northwestern.edu/netlogo/models/Electrostatics.  Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+Please cite the NetLogo software as:
 
-## RELATED MODELS
+* Wilensky, U. (1999). NetLogo. http://ccl.northwestern.edu/netlogo/. Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
 
-## CREDITS AND REFERENCES
+## COPYRIGHT AND LICENSE
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+Copyright 2021 Jacob Kelter and Uri Wilensky.
+
+![CC BY-NC-SA 3.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
+
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License.  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/3.0/ or send a letter to Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
+
+Commercial licenses are also available. To inquire about commercial licenses, please contact Uri Wilensky at uri@northwestern.edu.
 @#$#@#$#@
 default
 true
@@ -561,22 +591,6 @@ Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
 Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
 Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
 
-sheep
-false
-15
-Circle -1 true true 203 65 88
-Circle -1 true true 70 65 162
-Circle -1 true true 150 105 120
-Polygon -7500403 true false 218 120 240 165 255 165 278 120
-Circle -7500403 true false 214 72 67
-Rectangle -1 true true 164 223 179 298
-Polygon -1 true true 45 285 30 285 30 240 15 195 45 210
-Circle -1 true true 3 83 150
-Rectangle -1 true true 65 221 80 296
-Polygon -1 true true 195 285 210 285 210 240 240 210 195 210
-Polygon -7500403 true false 276 85 285 105 302 99 294 83
-Polygon -7500403 true false 219 85 210 105 193 99 201 83
-
 square
 false
 0
@@ -661,13 +675,6 @@ Line -7500403 true 40 84 269 221
 Line -7500403 true 40 216 269 79
 Line -7500403 true 84 40 221 269
 
-wolf
-false
-0
-Polygon -16777216 true false 253 133 245 131 245 133
-Polygon -7500403 true true 2 194 13 197 30 191 38 193 38 205 20 226 20 257 27 265 38 266 40 260 31 253 31 230 60 206 68 198 75 209 66 228 65 243 82 261 84 268 100 267 103 261 77 239 79 231 100 207 98 196 119 201 143 202 160 195 166 210 172 213 173 238 167 251 160 248 154 265 169 264 178 247 186 240 198 260 200 271 217 271 219 262 207 258 195 230 192 198 210 184 227 164 242 144 259 145 284 151 277 141 293 140 299 134 297 127 273 119 270 105
-Polygon -7500403 true true -1 195 14 180 36 166 40 153 53 140 82 131 134 133 159 126 188 115 227 108 236 102 238 98 268 86 269 92 281 87 269 103 269 113
-
 x
 false
 0
@@ -691,5 +698,5 @@ true
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 @#$#@#$#@
-1
+0
 @#$#@#$#@

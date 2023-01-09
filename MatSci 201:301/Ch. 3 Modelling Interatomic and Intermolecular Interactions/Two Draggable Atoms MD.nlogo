@@ -1,229 +1,162 @@
-breed [tick-marks tick-mark]
-breed [points point]
 breed [atoms atom]
+
 atoms-own [
-  vx
+  fx     ; x-component of force vector
+  fy     ; y-component of force vector
+  vx     ; x-component of velocity vector
+  vy     ; y-component of velocity vector
 ]
+
 globals [
-  atom1
-  atom2
+  diameter
+  eps
   dt
-  curve-log
-  latest-point-change
 ]
 
-;***************************
-;***********SETUP***********
-;***************************
+;;;;;;;;;;;;;;;;;;;;;;
+;; Setup Procedures ;;
+;;;;;;;;;;;;;;;;;;;;;;
 
-to full-setup
-  ca
-  set dt .001
-  set curve-log (list (list date-and-time 0 0))
+to setup
+  clear-all
   set-default-shape turtles "circle"
-  draw-axes
-  create-function-points
-  create-atoms 1 [
-    set atom1 self
-    set xcor 0
-    set color turquoise
-    set size 1.5]
-  create-atoms 1 [
-    set atom2 self
-    set xcor max-pxcor - 1
-    set size 1.5
-    set heading 90
-    set color red]
-
+  set dt .1
+  set diameter .9
+  set eps 0.5
+  setup-atoms
+  ask atom 0 [set color [255 194 10]]
+  reset-timer
   reset-ticks
 end
 
-to setup
-  ifelse curve-log = 0 [
-    full-setup
-  ] [
-    reset-ticks
-    clear-all-plots
-  ]
-  ask points [
-    set ycor 0
-    log-position
-  ]
-end
 
-
-to draw-axes
-  crt 1 [
-    set color white
+to setup-atoms
+  create-atoms 2 [
     set shape "circle"
-    pen-down
-    setxy 0 min-pycor
-    set heading 0
-    fd world-height
-    set ycor 0
-    set heading 90
-    fd world-width
-    bk world-width
-
-    die]
-end
-
-to create-function-points
-  ask patches with [pycor = 0 and pxcor >= 0] [
-    sprout-points 1 [
-      set size .5
-      set color blue + 1]]
-
-  ask points [
-    create-links-with other points with [abs (xcor - [xcor] of myself) = 1] [
-      set color blue
-      set thickness .3
-    ]
-
+    set size diameter
+    set color [12 123 220]
+    fd random-float 6
   ]
+
 end
 
-;************************
-;******Go*************
-;************************
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Runtime Procedures ;;
+;;;;;;;;;;;;;;;;;;;;;;;;
+
 to go
-  if [xcor < 0] of atom2 [
-    ask atom2 [die]
-    stop
+  drag-atoms-with-mouse
+  set-pen-mode
+
+  ask atoms [
+    update-force-and-velocity
   ]
-  (ifelse
-    go-mode = "draw potential" [draw-potential]
-    go-mode = "simulate/drag atom" [
-      drag-atom
-      move-atom
-      tick
-    ]
-  )
+  ask atoms [
+    move
+  ]
 
+  tick-advance dt
+  update-plots
 end
 
-to draw-potential
-  draw-function
-  display
+to set-pen-mode
+  ask atom 0 [
+    ifelse trace-yellow? [pen-down] [pen-up]
+  ]
+  ask atom 1 [
+    ifelse trace-blue? [pen-down] [pen-up]
+  ]
 end
 
-
-to draw-function
+to drag-atoms-with-mouse
   if mouse-down? [
-    ask min-one-of points [abs(xcor - mouse-xcor)] [
-      set ycor mouse-ycor
-      log-position
-    ]
-  ]
-end
-
-to log-position
-  if new-point? or moved-significantly? [
-     set curve-log lput (list date-and-time xcor ycor) curve-log
-     log-point
-  ]
-end
-
-to log-point
-  set latest-point-change (list date-and-time xcor ycor)
-end
-
-to-report new-point?
-  report xcor != (item 1 last curve-log)
-end
-
-to-report moved-significantly?
-  report abs (ycor - (last last curve-log)) >= .1
-end
-
-
-to move-atom
-  ask atom2 [
-    set vx vx + (force-at-x xcor) * dt
-    fd vx
-  ]
-end
-
-to drag-atom
-  if mouse-down? and (abs mouse-ycor) <= 1[ ;and [distancexy mouse-xcor mouse-ycor] of atom2 < 1 [
-    ask atom2 [
-      set xcor mouse-xcor
+    ask min-one-of turtles [distancexy mouse-xcor mouse-ycor] [
+      setxy mouse-xcor mouse-ycor
       set vx 0
+      set vy 0
     ]
   ]
 end
 
-to-report sign [n]
-  report ifelse-value n = 0 [0] [n / abs n]
+to update-force-and-velocity  ; atom procedure
+  let new-fx 0
+  let new-fy 0
+  ask other atoms [
+    let r distance myself
+    let force calc-force r
+    face myself
+    rt 180
+    set new-fx new-fx + (force * dx)
+    set new-fy new-fy + (force * dy)]
+
+  set vx velocity-verlet-velocity vx fx new-fx
+  set vy velocity-verlet-velocity vy fy new-fy
+  limit-max-speed
+  set fx new-fx
+  set fy new-fy
+
 end
 
-;******************************************
-;*******Potential/Force Functions**********
-;******************************************
-to-report potential-at-x [x]
-  ifelse x = round x [
-    report [ycor] of one-of points with [xcor = x]]
-  [
-    let left-point point-to-left x
-    let right-point point-to-right x
-    report [ycor] of left-point  + (slope right-point left-point) * (x - [xcor] of left-point)]
+to limit-max-speed
+  let max-speed .75
+  let speed sqrt (vx ^ 2 + vy ^ 2)
+  if speed >= max-speed [
+    let scaling max-speed / speed
+    set vx scaling * vx
+    set vy scaling * vy
+  ]
 end
 
-to-report slope [right-point left-point]
-  (ifelse
-    ;right-point = nobody and left-point = nobody [ask atom2 [die]]
-    right-point = nobody [report slope left-point (one-of points with [xcor = ([xcor] of left-point - 1)])]
-    left-point = nobody [report slope right-point (one-of points with [xcor = ([xcor] of right-point + 1)])]
-    ;; else:
-    [report ([ycor] of right-point - [ycor] of left-point) / ([xcor] of right-point - [xcor] of left-point)])
+to-report calc-force [r]
+  report (eps / (r ^ 7)) * (1 - (2 / (r ^ 6)))
 end
 
-to-report point-to-left [x]
-  report one-of points with [xcor < x and abs(xcor - x) < 1]
+to move  ; atom procedure
+  ;; Uses velocity-verlet algorithm
+  set xcor velocity-verlet-pos xcor vx fx
+  set ycor velocity-verlet-pos ycor vy fy
 end
 
-to-report point-to-right [x]
-  report one-of points with [xcor > x and abs(xcor - x) < 1]
+to-report velocity-verlet-pos [pos v a]  ; position, velocity and acceleration
+  report pos + v * dt + (1 / 2) * a * (dt ^ 2)
 end
 
-to-report force-at-x [x]
-  ifelse x = round x  ;; if the atom is exactly on one of the points of the function spline
-  [report mean (list force-at-x (x - 0.5) force-at-x (x + 0.5))]
-  [report (- slope (point-to-right x) (point-to-left x))]
+to-report velocity-verlet-velocity [v a new-a]  ; position and velocity
+  report v + (1 / 2) * (new-a + a) * dt
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-215
+125
 10
-688
 443
+329
 -1
 -1
-20.23
+44.3
 1
-10
+18
 1
 1
 1
 0
-0
-0
 1
--1
-21
--10
-10
-0
-0
+1
+1
+-3
+3
+-3
+3
+1
+1
 1
 ticks
 30.0
 
 BUTTON
-115
+0
 10
-215
-55
+120
+45
 NIL
 setup
 NIL
@@ -237,10 +170,10 @@ NIL
 1
 
 BUTTON
-145
-60
-210
-105
+0
+50
+120
+85
 NIL
 go
 T
@@ -253,75 +186,45 @@ NIL
 NIL
 0
 
-PLOT
-0
-115
+TEXTBOX
+5
 210
-265
-x position vs time
-NIL
-NIL
+110
+346
+The nearest atom will move to wherever you click the mouse. \n\nClick and drag the atoms to explore how they interact. 
+11
 0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot [xcor] of atom2"
-
-BUTTON
-55
-270
-161
-303
-reset-graph
-reset-ticks\nclear-all-plots\n
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
 1
 
-BUTTON
-15
-307
-195
-367
-export-sketch
-export-view \"interatomic-potential\"\t
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-CHOOSER
+SWITCH
 0
-60
-140
-105
-go-mode
-go-mode
-"draw potential" "simulate/drag atom"
+90
+120
+123
+trace-yellow?
+trace-yellow?
+0
 1
+-1000
+
+SWITCH
+0
+130
+120
+163
+trace-blue?
+trace-blue?
+0
+1
+-1000
 
 BUTTON
 0
-10
-92
-43
-NIL
-full-setup
+170
+117
+203
+clear traces
+clear-drawing
 NIL
 1
 T
@@ -331,43 +234,69 @@ NIL
 NIL
 NIL
 1
+
+MONITOR
+535
+40
+675
+85
+atom 0 speed
+[sqrt (vx ^ 2 + vy ^ 2)] of atom 0
+4
+1
+11
+
+MONITOR
+535
+120
+632
+165
+attom 1 speed
+[sqrt (vx ^ 2 + vy ^ 2)] of atom 1
+4
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This model shows atoms interacting and moving according to Newton's laws. This is known as a "molecular dynamics model." In this model, one atom is colored green and traces its path to visualize how any given atom moves over time. It is a visualization of Brownian Motion.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+Atoms in this model interact according to the Lennard-Jones interatomic potential. The protons and electrons in each atom interact with the electrons and protons in other atoms. The opposite charge particles (protons in one atom and electrons in the other) attract and the same-charged particles repel. At close distances, the repulsion is stronger than the attraction and atoms exert a net repulsive force on each other. At long distances the attraction is stronger than the repulsion and the atoms exert a net attractive force on each other. At a specific distance the two forces balance and the net force they exert on each other is zero. 
+
+At each tick in the model, atoms calculate the forces they feel from all the atoms around them and sum these forces into a single net-force vector. Based on this force, they are accelerated according to F=ma (a=F/m). They then move a small distance at their current velocity. 
+
+The green particle traces the path that it follows. 
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+When you press the SETUP button, a number of atoms are created according to the NUM-ATOMS slider. If INITIAL-CONFIG is set to "random" then the atoms will be positioned randomly. If it is set to "HCP" the atoms will start in a hexagonally close-packed structure. The initial velocities are set so that the temperature of the system equals the TEMP slider. Remember, that temperature is actually a measure of the average kinetic energy of the atoms in the system.
+
+If CONSTANT-TEMP? is on, then the velocities of the particles are scaled each tick to keep the average temperate equal to the TEMP slider. You can think of this as the system being in thermal equilibrium with some outside body that is at that temperature. If CONSTANT-TEMP? is off, then the temperature is allowed to change away from the initial temperature You can think of this as the system being thermally insulated.
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+- Notice the path that the green particle takes. Does it look random?
+- Notice the distribution of velocities in the x and y directions. 
+
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+- Try running the simulation at different temperatures. How does this affect the velocity distributions?
+- Try starting the atoms in random vs HCP configurations. 
 
 ## EXTENDING THE MODEL
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
-
-## NETLOGO FEATURES
-
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
 
 ## RELATED MODELS
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
+
+## NETLOGO FEATURES
+
 
 ## CREDITS AND REFERENCES
-
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
 @#$#@#$#@
 default
 true
@@ -561,22 +490,6 @@ Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
 Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
 Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
 
-sheep
-false
-15
-Circle -1 true true 203 65 88
-Circle -1 true true 70 65 162
-Circle -1 true true 150 105 120
-Polygon -7500403 true false 218 120 240 165 255 165 278 120
-Circle -7500403 true false 214 72 67
-Rectangle -1 true true 164 223 179 298
-Polygon -1 true true 45 285 30 285 30 240 15 195 45 210
-Circle -1 true true 3 83 150
-Rectangle -1 true true 65 221 80 296
-Polygon -1 true true 195 285 210 285 210 240 240 210 195 210
-Polygon -7500403 true false 276 85 285 105 302 99 294 83
-Polygon -7500403 true false 219 85 210 105 193 99 201 83
-
 square
 false
 0
@@ -661,13 +574,6 @@ Line -7500403 true 40 84 269 221
 Line -7500403 true 40 216 269 79
 Line -7500403 true 84 40 221 269
 
-wolf
-false
-0
-Polygon -16777216 true false 253 133 245 131 245 133
-Polygon -7500403 true true 2 194 13 197 30 191 38 193 38 205 20 226 20 257 27 265 38 266 40 260 31 253 31 230 60 206 68 198 75 209 66 228 65 243 82 261 84 268 100 267 103 261 77 239 79 231 100 207 98 196 119 201 143 202 160 195 166 210 172 213 173 238 167 251 160 248 154 265 169 264 178 247 186 240 198 260 200 271 217 271 219 262 207 258 195 230 192 198 210 184 227 164 242 144 259 145 284 151 277 141 293 140 299 134 297 127 273 119 270 105
-Polygon -7500403 true true -1 195 14 180 36 166 40 153 53 140 82 131 134 133 159 126 188 115 227 108 236 102 238 98 268 86 269 92 281 87 269 103 269 113
-
 x
 false
 0
@@ -676,6 +582,7 @@ Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
 NetLogo 6.3.0
 @#$#@#$#@
+need-to-manually-make-preview-for-this-model
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
