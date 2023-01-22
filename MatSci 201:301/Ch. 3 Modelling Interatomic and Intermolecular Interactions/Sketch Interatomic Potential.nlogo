@@ -10,46 +10,60 @@ globals [
   dt
   curve-log
   latest-point-change
+
 ]
 
 ;***************************
 ;***********SETUP***********
 ;***************************
 
-to full-setup
+to setup
   ca
   set dt .001
   set curve-log (list (list date-and-time 0 0))
   set-default-shape turtles "circle"
+
   draw-axes
+
   create-function-points
+
+  reset-atoms
+
+  reset-ticks
+end
+
+to reset-atoms
+
+  ask atoms [die]
+
   create-atoms 1 [
     set atom1 self
     set xcor 0
     set color turquoise
-    set size 1.5]
+    set size 1.5
+  ]
+
   create-atoms 1 [
     set atom2 self
     set xcor max-pxcor - 1
     set size 1.5
     set heading 90
-    set color red]
-
-  reset-ticks
-end
-
-to setup
-  ifelse curve-log = 0 [
-    full-setup
-  ] [
-    reset-ticks
-    clear-all-plots
-  ]
-  ask points [
-    set ycor 0
-    log-position
+    set color red
   ]
 end
+
+;to setup
+;  ifelse curve-log = 0 [
+;    full-setup
+;  ] [
+;    reset-ticks
+;    clear-all-plots
+;  ]
+;  ask points [
+;    set ycor 0
+;    log-position
+;  ]
+;end
 
 
 to draw-axes
@@ -72,14 +86,15 @@ to create-function-points
   ask patches with [pycor = 0 and pxcor >= 0] [
     sprout-points 1 [
       set size .5
-      set color blue + 1]]
+      set color blue + 1]
+  ]
 
   ask points [
     create-links-with other points with [abs (xcor - [xcor] of myself) = 1] [
       set color blue
       set thickness .3
     ]
-
+    log-position
   ]
 end
 
@@ -87,7 +102,7 @@ end
 ;******Go*************
 ;************************
 to go
-  if [xcor < 0] of atom2 [
+  if atom2 != nobody and [xcor < 0] of atom2 [
     ask atom2 [die]
     stop
   ]
@@ -220,9 +235,9 @@ ticks
 30.0
 
 BUTTON
-115
+0
 10
-215
+100
 55
 NIL
 setup
@@ -313,15 +328,15 @@ CHOOSER
 go-mode
 go-mode
 "draw potential" "simulate/drag atom"
-1
+0
 
 BUTTON
-0
+110
 10
-92
-43
-NIL
-full-setup
+212
+55
+reset atoms
+reset-atoms
 NIL
 1
 T
@@ -330,7 +345,7 @@ NIL
 NIL
 NIL
 NIL
-1
+0
 
 @#$#@#$#@
 ## WHAT IS IT?

@@ -204,11 +204,11 @@ end
 GRAPHICS-WINDOW
 192
 10
-485
-304
+585
+404
 -1
 -1
-13.6
+9.4
 1
 18
 1
@@ -218,10 +218,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--10
-10
--10
-10
+-20
+20
+-20
+20
 1
 1
 1
@@ -270,8 +270,8 @@ SLIDER
 num-atoms
 num-atoms
 0
-50
-24.0
+100
+30.0
 1
 1
 NIL
@@ -296,7 +296,7 @@ temp
 temp
 0.00
 20
-1.8
+7.1
 .1
 1
 NIL
@@ -309,7 +309,7 @@ SWITCH
 278
 constant-temperature?
 constant-temperature?
-1
+0
 1
 -1000
 
@@ -331,9 +331,9 @@ SLIDER
 68
 anion-cation-size-ratio
 anion-cation-size-ratio
-0.5
+0.25
 4
-1.16
+1.0
 .01
 1
 NIL

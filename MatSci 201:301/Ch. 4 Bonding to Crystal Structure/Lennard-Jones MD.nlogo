@@ -1,7 +1,6 @@
-extensions [profiler]
-breed [particles particle]
+breed [atoms atom]
 
-particles-own [
+atoms-own [
   ax     ; x-component of acceleration vector
   ay     ; y-component of acceeleration vector
   vx     ; x-component of velocity vector
@@ -9,24 +8,15 @@ particles-own [
 ]
 
 globals [
-  diameter
   r-min
   eps
   -eps*4
   cutoff-dist
+  force-offset
+  PE-offset
   dt
   kb
 ]
-
-
-
-to profile
-  profiler:reset
-  profiler:start
-  repeat 10000 [go]
-  profiler:stop
-  print profiler:report
-end
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Setup Procedures ;;
@@ -35,25 +25,46 @@ end
 to setup
   clear-all
   set-default-shape turtles "circle"
-  set dt .1
-  set kb (1 / 1000)  ; just picking a random constant for Kb that makes things work reasonably
-  set diameter .9
-  set r-min 1
+  set dt .01
+  set kb (1 / 10)  ; just picking a random constant for Kb that makes things work reasonably
+  set r-min  2 ^ (1 / 6)
   set eps 1
   set -eps*4 -4 * eps
-  set cutoff-dist 5 * r-min
+  ifelse num-atoms = 3 [
+    set cutoff-dist world-width
+  ] [
+    set cutoff-dist 2.5 * r-min
+  ]
+  set force-offset -1 * calc-force-without-offset cutoff-dist
+  set PE-offset -1 * calc-pair-PE-without-offset cutoff-dist
   setup-atoms
   init-velocity
-  ask particle 1 [set vx atom1-initial-vx]
+  if num-atoms = 3 [
+    ask atoms [set vx 0 set vy 0]
+    create-link-rulers
+  ]
+
   reset-timer
   reset-ticks
 end
 
+to create-link-rulers
+  ask atoms [
+    ask other atoms [
+      create-link-with myself
+    ]
+  ]
+  ask links [set-label-distance]
+end
+
+to set-label-distance
+  let d [distance [end1] of myself ] of end2
+  set label (word precision (d / r-min) 1 " r0")
+end
 
 to setup-atoms
-  create-particles num-atoms [
+  create-atoms num-atoms [
     set shape "circle"
-    set size diameter
     set color blue
   ]
 
@@ -76,7 +87,7 @@ to setup-atoms
   ]
 
   if initial-config = "Random" [
-    ask particles [
+    ask atoms [
       setxy random-xcor random-ycor
     ]
     remove-overlap ;make sure atoms aren't overlapping
@@ -85,8 +96,8 @@ to setup-atoms
 end
 
 to init-velocity
-  let v-avg sqrt( 3 * Kb * temp)
-  ask particles [
+  let v-avg sqrt( 2 * Kb * temp)
+  ask atoms [
     let a random-float 1  ; a random amount of the total velocity to go the x direction
     set vx sqrt (a * v-avg ^ 2) * positive-or-negative
     set vy sqrt( v-avg ^ 2 - vx ^ 2)  * positive-or-negative
@@ -100,7 +111,7 @@ end
 
 
 to remove-overlap
-  ask particles [
+  ask atoms [
     while [overlapping] [
       setxy random-xcor random-ycor
     ]
@@ -117,10 +128,19 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;
 
 to go
-  ask particles [
+  (ifelse
+    go-mode = "simulate" [simulate]
+    go-mode = "drag atoms" [drag-atoms-with-mouse]
+  )
+
+end
+
+to simulate
+  ask links [hide-link]
+  ask atoms [
     update-force-and-velocity
   ]
-  ask particles [
+  ask atoms [
     move
   ]
   if constant-temp? [scale-velocities]
@@ -130,7 +150,7 @@ end
 
 
 to-report current-temp
-  report (1 / (2 * Kb)) * mean [vx ^ 2 + vy ^ 2] of particles
+  report (1 / (2 * Kb)) * mean [vx ^ 2 + vy ^ 2] of atoms
 end
 
 
@@ -138,11 +158,11 @@ to scale-velocities
   let ctemp current-temp
   (ifelse
     ctemp = 0 and temp != 0 [
-      ask particles [init-velocity]
+      ask atoms [init-velocity]
     ]
     ctemp != 0 [
-      let scale-factor sqrt( temp / ctemp )  ; if "external" temperature is higher particles will speed up and vice versa
-      ask particles [
+      let scale-factor sqrt( temp / ctemp )  ; if "external" temperature is higher atoms will speed up and vice versa
+      ask atoms [
         set vx vx * scale-factor
         set vy vy * scale-factor
       ]
@@ -150,10 +170,10 @@ to scale-velocities
   )
 end
 
-to update-force-and-velocity  ; particle procedure
+to update-force-and-velocity  ; atom procedure
   let new-ax 0
   let new-ay 0
-  ask other particles in-radius cutoff-dist [
+  ask other atoms in-radius cutoff-dist [
     let r distance myself
     let force calc-force r
     face myself
@@ -161,7 +181,6 @@ to update-force-and-velocity  ; particle procedure
     set new-ax new-ax + (force * dx)  ; assuming mass = 1. If not, neeed to divide force by mass to get acceleration
     set new-ay new-ay + (force * dy)
   ]
-
   set vx velocity-verlet-velocity vx ax new-ax
   set vy velocity-verlet-velocity vy ay new-ay
   set ax new-ax
@@ -170,12 +189,17 @@ to update-force-and-velocity  ; particle procedure
 end
 
 to-report calc-force [r]
-  let r^3 r * r * r
-  let r^6 r^3 * r^3
-  report (-eps*4 / (r^6 * r)) * ((1 / r^6) - 1)
+  report calc-force-without-offset r + force-offset
 end
 
-to move  ; particle procedure
+to-report calc-force-without-offset [r]
+  let r^3 r * r * r
+  let r^6 r^3 * r^3
+  ;report (-eps*4 / (r^6 * r)) * ((1 / r^6) - 1)
+  report (-eps*4 * 6 / (r^6 * r)) * ((2 / r^6) - 1)
+end
+
+to move  ; atom procedure
   ;; Uses velocity-verlet algorithm
   set xcor velocity-verlet-pos xcor vx ax
   set ycor velocity-verlet-pos ycor vy ay
@@ -188,12 +212,55 @@ end
 to-report velocity-verlet-velocity [v a new-a]  ; velocity, previous acceleration, new acceleration
   report v + (1 / 2) * (new-a + a) * dt
 end
+
+
+to-report calc-PE
+  let U 0  ;; U stands for PE
+
+  ask other turtles in-radius cutoff-dist [
+
+    set U U + calc-pair-PE (distance myself)
+  ]
+  report U
+end
+
+to-report calc-pair-PE [r]
+  report calc-pair-PE-without-offset r + PE-offset
+end
+
+to-report calc-pair-PE-without-offset [r]
+  let rsquare r ^ 2
+  let attract-term 1 / rsquare ^ 3
+  let repel-term attract-term * attract-term
+  ;NOTE could do this a little faster by attract-term * (attract-term -1)
+  report 4 * eps * (repel-term - attract-term)
+end
+
+
+to drag-atoms-with-mouse
+  ask links [show-link]
+  if mouse-down? [
+    ask min-one-of turtles [distancexy mouse-xcor mouse-ycor] [
+      let oldx xcor
+      let oldy ycor
+      setxy mouse-xcor mouse-ycor
+      ifelse calc-PE > 1 [ ; if energy would be too high, don't let the atom go there.
+        setxy oldx oldy
+      ] [
+        set vx 0
+        set vy 0
+      ]
+    ]
+  ]
+  ask links [set-label-distance]
+  display
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-185
-0
-519
-335
+180
+10
+514
+345
 -1
 -1
 29.69
@@ -217,10 +284,10 @@ ticks
 30.0
 
 BUTTON
-0
+105
+55
+170
 90
-86
-123
 NIL
 setup
 NIL
@@ -234,10 +301,10 @@ NIL
 1
 
 BUTTON
-90
-90
-176
-123
+105
+105
+172
+138
 NIL
 go
 T
@@ -252,14 +319,14 @@ NIL
 
 SLIDER
 0
-50
+10
 172
-83
+43
 num-atoms
 num-atoms
 0
 30
-28.0
+20.0
 1
 1
 NIL
@@ -267,24 +334,24 @@ HORIZONTAL
 
 CHOOSER
 0
-0
-138
-45
+50
+95
+95
 initial-config
 initial-config
 "Solid" "Random"
-0
+1
 
 SLIDER
 0
-130
+155
 172
-163
+188
 temp
 temp
-0.00
-5
-5.0
+0
+8
+0.3
 .1
 1
 NIL
@@ -292,9 +359,9 @@ HORIZONTAL
 
 SWITCH
 0
-170
-155
-203
+195
+135
+228
 constant-temp?
 constant-temp?
 0
@@ -303,37 +370,32 @@ constant-temp?
 
 MONITOR
 0
-210
-86
-255
+235
+55
+280
 temp
 current-temp
 3
 1
 11
 
-SLIDER
+CHOOSER
 0
-310
-170
-343
-atom1-initial-vx
-atom1-initial-vx
-0
-.2
-0.0
-.01
+100
+95
+145
+go-mode
+go-mode
+"drag atoms" "simulate"
 1
-NIL
-HORIZONTAL
 
 TEXTBOX
-0
-265
-150
-314
-Turn off constant-temp? when using this slider and set temp to 0
-12
+60
+235
+170
+275
+This will match the temp slider if contant-temp? is on
+11
 0.0
 1
 
@@ -698,5 +760,5 @@ true
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 @#$#@#$#@
-0
+1
 @#$#@#$#@
