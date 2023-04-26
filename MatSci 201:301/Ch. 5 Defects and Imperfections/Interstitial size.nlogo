@@ -114,7 +114,7 @@ to setup-atoms [x-dist y-dist]
 
   ; pin the bottom row
 
-    ask turtles with-min [ycor] [
+    ask atoms with-min [ycor] [
       set pinned? true
       set shape "circle-X"
     ]
@@ -278,7 +278,7 @@ end
 to-report calc-PE
   let U 0  ;; U stands for PE
 
-  ask other turtles in-radius cutoff-dist [
+  ask other atoms in-radius cutoff-dist [
     set U U + calc-pair-PE-with myself
   ]
   report U
@@ -315,9 +315,9 @@ end
 to drag-atoms-with-mouse
 
   if mouse-down? [
-    let close-turtles turtles with [distance-to-mouse < 0.5]
-    if any? close-turtles [
-      ask min-one-of close-turtles [distance-to-mouse] [
+    let close-atoms atoms with [distance-to-mouse < 0.5]
+    if any? close-atoms [
+      ask min-one-of close-atoms [distance-to-mouse] [
         let oldx xcor
         let oldy ycor
         setxy mouse-xcor mouse-ycor

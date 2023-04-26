@@ -204,11 +204,11 @@ end
 GRAPHICS-WINDOW
 192
 10
-585
-404
+509
+328
 -1
 -1
-9.4
+10.0
 1
 18
 1
@@ -218,10 +218,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--20
-20
--20
-20
+-15
+15
+-15
+15
 1
 1
 1
@@ -285,7 +285,7 @@ CHOOSER
 initial-arrangement
 initial-arrangement
 "Solid" "Random"
-1
+0
 
 SLIDER
 10
@@ -296,7 +296,7 @@ temp
 temp
 0.00
 20
-7.1
+2.0
 .1
 1
 NIL
@@ -333,7 +333,7 @@ anion-cation-size-ratio
 anion-cation-size-ratio
 0.25
 4
-1.0
+3.28
 .01
 1
 NIL

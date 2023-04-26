@@ -98,7 +98,7 @@ to setup-atoms [x-dist y-dist]
 
   ; pin the bottom row
 
-    ask turtles with-min [ycor] [
+    ask atoms with-min [ycor] [
       set pinned? true
       set shape "circle-X"
     ]
@@ -266,7 +266,7 @@ end
 to-report calc-PE
   let U 0  ;; U stands for PE
 
-  ask other turtles in-radius cutoff-dist [
+  ask other atoms in-radius cutoff-dist [
     set U U + calc-pair-PE-with myself
   ]
   report U
@@ -303,9 +303,9 @@ end
 to drag-atoms-with-mouse
 
   if mouse-down? [
-    let close-turtles turtles with [distance-to-mouse < 0.5]
-    if any? close-turtles [
-      ask min-one-of close-turtles [distance-to-mouse] [
+    let close-atoms atoms with [distance-to-mouse < 0.5]
+    if any? close-atoms [
+      ask min-one-of close-atoms [distance-to-mouse] [
         let oldx xcor
         let oldy ycor
         setxy mouse-xcor mouse-ycor
@@ -528,8 +528,8 @@ SLIDER
 temp
 temp
 0
-.4
-0.05
+.2
+0.02
 .01
 1
 NIL
@@ -553,7 +553,7 @@ SWITCH
 78
 show-diagonal-right-links?
 show-diagonal-right-links?
-0
+1
 1
 -1000
 
@@ -564,7 +564,7 @@ SWITCH
 113
 show-diagonal-left-links?
 show-diagonal-left-links?
-0
+1
 1
 -1000
 
@@ -575,7 +575,7 @@ SWITCH
 148
 show-horizontal-links?
 show-horizontal-links?
-0
+1
 1
 -1000
 
@@ -751,7 +751,7 @@ CHOOSER
 new-atom-color
 new-atom-color
 "red" "violet" "green" "orange" "blue"
-2
+0
 
 CHOOSER
 40

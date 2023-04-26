@@ -9,7 +9,6 @@ atoms-own [
 ]
 
 globals [
-  diameter
   r-min
   eps
   cutoff-dist
@@ -27,9 +26,8 @@ globals [
 to setup
   clear-all
   set-default-shape turtles "circle"
-  set dt .1
-  set kb (1 / 1000)  ; just picking a random constant for Kb that makes things work reasonably
-  set diameter 1
+  set dt .01
+  set kb 1 / 100 ;; arbitrary constant to make temperature scale friendlier
   set r-min 1.12
   set eps 1
   set cutoff-dist 2 * r-min
@@ -46,12 +44,10 @@ to setup-atoms
   let num-atoms 23
   create-atoms num-atoms [
     set shape "circle"
-    set size diameter
+    set size 1
     set color blue
     set pinned? false
   ]
-
-
   let l sqrt(num-atoms) ;the # of atoms in a row
   let x-dist r-min
   let y-dist sqrt (x-dist ^ 2 - (x-dist / 2) ^ 2)
@@ -68,13 +64,12 @@ to setup-atoms
     setxy xpos ypos  ;if we are still in the same row
     set xpos xpos + x-dist
   ]
+  ;ask max-n-of 2 (atoms with-min [ycor]) [abs pxcor] [
   ask atoms with-min [ycor] [
     set pinned? true
+    set shape "circle 2"
     set color color + 1
   ]
-
-
-
   set free-atoms atoms with [not pinned?]
 end
 
@@ -101,20 +96,30 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;
 
 to go
-  if ticks > 100 and (precision ticks 2 mod 20) = 0 and temp <= 6.9 [set temp temp + 0.1]
+  increment-temp
   set distances-rolling-mean 0.99 * distances-rolling-mean + 0.01 * mean distances-list
   set distances-list (list) ; reset the list
+
   ask free-atoms [
     update-force-and-velocity
   ]
+
   ask free-atoms [
     move
   ]
+
   scale-velocities
+
   tick-advance dt
   update-plots
 end
 
+to increment-temp
+  if auto-increase-temp? and ticks > 10 and (precision ticks 2 mod 10) = 0 and temp < 7 [
+    set temp precision (temp + 0.1) 2
+    ask atoms [init-velocity]
+  ]
+end
 
 to-report current-temp
   report (1 / (3 * Kb)) * mean [vx ^ 2 + vy ^ 2] of free-atoms
@@ -140,11 +145,10 @@ end
 to update-force-and-velocity  ; atom procedure
   let new-fx 0
   let new-fy 0
-  ask other atoms in-radius cutoff-dist [
+  ask other atoms [;in-radius cutoff-dist [
     let r distance myself
     let force calc-force r
     face myself
-    rt 180
     set new-fx new-fx + (force * dx)
     set new-fy new-fy + (force * dy)
 
@@ -159,12 +163,6 @@ to update-force-and-velocity  ; atom procedure
   set fx new-fx
   set fy new-fy
 
-end
-
-to-report calc-force [r]
-  ;; This is the LJ force with terms factored out and assuming sigma=1 and ignoring the factor of 4 usually at the beginning of the LJ potential
-  ;; 0.01846629628836721 is the adjustement for the cutoff distance
-  report (- 6 * eps / (r ^ 7)) * (2 * (r ^ -6) - 1) - 0.01846629628836721
 end
 
 to move  ; atom procedure
@@ -182,11 +180,18 @@ end
 to-report velocity-verlet-velocity [v a new-a]  ; position and velocity
   report v + (1 / 2) * (new-a + a) * dt
 end
+
+
+to-report calc-force [r]
+  ;; Remember, that the force function is the derivative of the potential energy function
+  let sigma 1
+  report -4 * eps * (-12 * (sigma ^ 12 / r ^ 13) + 6 * (sigma ^ 6 / r ^ 7)) ;; derivative of the LJ potential
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-186
+178
 10
-465
+534
 290
 -1
 -1
@@ -197,11 +202,11 @@ GRAPHICS-WINDOW
 1
 1
 0
+0
+0
 1
-1
-1
--3
-3
+-4
+4
 -3
 3
 1
@@ -246,66 +251,58 @@ NIL
 
 SLIDER
 0
-87
+137
 172
-120
+170
 temp
 temp
-1
+.1
 7
-1.0
+5.9
 .1
 1
 NIL
 HORIZONTAL
 
 PLOT
-466
-10
-666
-195
-mean neighbor distance vs time
-NIL
-NIL
+538
+11
+821
+293
+mean neighbor distance vs temp
+temperature
+mean neighbor distance
 0.0
-10.0
-1.1
-1.15
-true
-false
-"" ""
-PENS
-"instantaneous" 1.0 0 -7500403 true "" "plot mean distances-list"
-"rolling avg" 1.0 0 -16777216 true "" "plot distances-rolling-mean"
-
-PLOT
-468
-197
-668
-347
-mean neighbor dist. vs temp
-NIL
-NIL
-1.0
 7.0
-1.12
+1.112
 1.13
 true
 false
 "" ""
 PENS
-"default" 1.0 2 -16777216 true "" "if ticks > 100 [plotxy temp distances-rolling-mean]"
+"default" 1.0 2 -16777216 true "" "if ticks > 10 [plotxy temp distances-rolling-mean]"
 
 MONITOR
-343
-10
-464
-55
+412
+13
+533
+58
 mean neighbor dist
 distances-rolling-mean
 3
 1
 11
+
+SWITCH
+0
+101
+174
+134
+auto-increase-temp?
+auto-increase-temp?
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
