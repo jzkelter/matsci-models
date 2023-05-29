@@ -10,7 +10,6 @@
 ; - improve how charge-carriers find left and right meters by using the sorted-meters list
 ; - retry giving charges to  meters based on cloud algorithm and see how different it is
 
-extensions [profiler]
 
 globals [
   electron-diameter
@@ -58,14 +57,15 @@ meters-own [
   running-ave-potential
 ]
 
-to profile
-  setup                  ;; set up the model
-  profiler:start         ;; start profiling
-  repeat 100 [ go ]       ;; run something you want to measure
-  profiler:stop          ;; stop profiling
-  print profiler:report  ;; view the results
-  profiler:reset         ;; clear the data
-end
+
+;to profile
+;  setup                  ;; set up the model
+;  profiler:start         ;; start profiling
+;  repeat 100 [ go ]       ;; run something you want to measure
+;  profiler:stop          ;; stop profiling
+;  print profiler:report  ;; view the results
+;  profiler:reset         ;; clear the data
+;end
 
 ;**************************************
 ;**********SETUP PROCEDURES************
@@ -640,7 +640,7 @@ p-doping-frac
 p-doping-frac
 0
 1
-1.0
+0.5
 .1
 1
 NIL
@@ -655,7 +655,7 @@ n-doping-frac
 n-doping-frac
 0
 1
-1.0
+0.5
 .1
 1
 NIL
@@ -1298,7 +1298,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.2.2
+NetLogo 6.3.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
